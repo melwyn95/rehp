@@ -19,24 +19,27 @@
 
 (** Json **)
 
+open! Deriving_Json_import
 module Lexer = Deriving_Json_lexer
 
 type 'a t =
   { write : Buffer.t -> 'a -> unit
-  ; read : Lexer.lexbuf -> 'a }
+  ; read : Lexer.lexbuf -> 'a
+  }
 
-let make write read = {write; read}
+let make write read = { write; read }
 
 let read t = t.read
 
 let write t = t.write
 
 let convert t f1 f2 =
-  {write = (fun buf a -> t.write buf (f2 a)); read = (fun buf -> f1 (t.read buf))}
+  { write = (fun buf a -> t.write buf (f2 a)); read = (fun buf -> f1 (t.read buf)) }
 
 let to_string t v =
   let buf = Buffer.create 50 in
-  t.write buf v; Buffer.contents buf
+  t.write buf v;
+  Buffer.contents buf
 
 (*let to_channel t oc v =
   let buf = Buffer.create 50 in
@@ -68,9 +71,9 @@ module type Json_min' = sig
 
   val read : Lexer.lexbuf -> a
 
-  val match_variant : [`Cst of int | `NCst of int] -> bool
+  val match_variant : [ `Cst of int | `NCst of int ] -> bool
 
-  val read_variant : Lexer.lexbuf -> [`Cst of int | `NCst of int] -> a
+  val read_variant : Lexer.lexbuf -> [ `Cst of int | `NCst of int ] -> a
 end
 
 module type Json_min'' = sig
@@ -106,15 +109,15 @@ module type Json = sig
   val from_string : string -> a
 
   (* val from_channel: in_channel -> a *)
-  val match_variant : [`Cst of int | `NCst of int] -> bool
+  val match_variant : [ `Cst of int | `NCst of int ] -> bool
 
-  val read_variant : Lexer.lexbuf -> [`Cst of int | `NCst of int] -> a
+  val read_variant : Lexer.lexbuf -> [ `Cst of int | `NCst of int ] -> a
 end
 
 module Defaults (J : Json_min) : Json with type a = J.a = struct
   include J
 
-  let t = {write; read}
+  let t = { write; read }
 
   let to_string v = to_string t v
 
@@ -130,7 +133,7 @@ end
 module Defaults' (J : Json_min') : Json with type a = J.a = struct
   include J
 
-  let t = {write; read}
+  let t = { write; read }
 
   let to_string v = to_string t v
 
@@ -260,7 +263,7 @@ module Json_float = Defaults (struct
   let write buffer f =
     (* "%.15g" can be (much) shorter; "%.17g" is round-trippable *)
     let s = Printf.sprintf "%.15g" f in
-    if float_of_string s = f
+    if Poly.(float_of_string s = f)
     then Buffer.add_string buffer s
     else Printf.bprintf buffer "%.17g" f
 
@@ -272,7 +275,7 @@ module Json_string = Defaults (struct
      just a sequence of byte we need to "embed" byte string in an
      UTF-8 sequence. Each byte af an OCaml string is considered as
      Unicode code point (< 256) and then encoded in UTF-8. Hence,
-     bytes greater than 127 are "wrapped" in two bytes.  *)
+     bytes greater than 127 are "wrapped" in two bytes. *)
   type a = string
 
   let write buffer s =
@@ -286,10 +289,10 @@ module Json_string = Defaults (struct
       | '\n' -> Buffer.add_string buffer "\\n"
       | '\r' -> Buffer.add_string buffer "\\r"
       | '\t' -> Buffer.add_string buffer "\\t"
-      | c when c <= '\x1F' ->
+      | c when Poly.(c <= '\x1F') ->
           (* Other control characters are escaped. *)
           Printf.bprintf buffer "\\u%04X" (int_of_char c)
-      | c when c < '\x80' -> Buffer.add_char buffer s.[i]
+      | c when Poly.(c < '\x80') -> Buffer.add_char buffer s.[i]
       | _c (* >= '\x80' *) ->
           (* Bytes greater than 127 are embedded in a UTF-8 sequence. *)
           Buffer.add_char buffer (Char.chr (0xC2 lor (Char.code s.[i] lsr 6)));
@@ -344,7 +347,8 @@ let read_ref f buf =
   | `NCst 0 ->
       Lexer.read_comma buf;
       let x = f buf in
-      Lexer.read_rbracket buf; ref x
+      Lexer.read_rbracket buf;
+      ref x
   | _ -> Lexer.tag_error ~typename:"ref" buf
 
 let write_ref f buffer r = Printf.bprintf buffer "[0,%a]" f !r
@@ -363,7 +367,8 @@ let read_option f buf =
   | `NCst 0 ->
       Lexer.read_comma buf;
       let x = f buf in
-      Lexer.read_rbracket buf; Some x
+      Lexer.read_rbracket buf;
+      Some x
   | _ -> Lexer.tag_error ~typename:"option" buf
 
 let write_option f buffer o =

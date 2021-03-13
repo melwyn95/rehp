@@ -137,7 +137,7 @@ type +'a constr
 (** A value of type [(t1 -> ... -> tn -> t Js.t) Js.constr] is a
       Javascript constructor expecting {i n} arguments of types [t1]
       to [tn] and returning a Javascript object of type [t Js.t].  Use
-      the syntax extension [jsnew c (e1, ..., en)] to build an object
+      the syntax extension [new%js c (e1, ..., en)] to build an object
       using constructor [c] and arguments [e1] to [en]. *)
 
 (** {2 Callbacks to OCaml} *)
@@ -287,17 +287,17 @@ val string_constr : string_constr t
 (** The string constructor, as an object. *)
 
 val regExp : (js_string t -> regExp t) constr
-(** Constructor of [RegExp] objects.  The expression [jsnew regExp (s)]
+(** Constructor of [RegExp] objects.  The expression [new%js regExp (s)]
       builds the regular expression specified by string [s]. *)
 
 val regExp_withFlags : (js_string t -> js_string t -> regExp t) constr
 (** Constructor of [RegExp] objects.  The expression
-      [jsnew regExp (s, f)] builds the regular expression specified by
+      [new%js regExp (s, f)] builds the regular expression specified by
       string [s] using flags [f]. *)
 
 val regExp_copy : (regExp t -> regExp t) constr
 (** Constructor of [RegExp] objects.  The expression
-      [jsnew regExp (r)] builds a copy of regular expression [r]. *)
+      [new%js regExp (r)] builds a copy of regular expression [r]. *)
 
 (** Specification of Javascript regular arrays.
     Use [Js.array_get] and [Js.array_set] to access and set array elements. *)
@@ -379,11 +379,11 @@ val object_keys : 'a t -> js_string t js_array t
 
 val array_empty : 'a js_array t constr
 (** Constructor of [Array] objects.  The expression
-      [jsnew array_empty ()] returns an empty array. *)
+      [new%js array_empty ()] returns an empty array. *)
 
 val array_length : (int -> 'a js_array t) constr
 (** Constructor of [Array] objects.  The expression
-      [jsnew array_length (l)] returns an array of length [l]. *)
+      [new%js array_length (l)] returns an array of length [l]. *)
 
 val array_get : 'a #js_array t -> int -> 'a optdef
 (** Array access: [array_get a i] returns the element at index [i]
@@ -539,38 +539,38 @@ class type date =
   end
 
 val date_now : date t constr
-(** Constructor of [Date] objects: [jsnew date_now ()] returns a
+(** Constructor of [Date] objects: [new%js date_now ()] returns a
       [Date] object initialized with the current date. *)
 
 val date_fromTimeValue : (float -> date t) constr
-(** Constructor of [Date] objects: [jsnew date_fromTimeValue (t)] returns a
+(** Constructor of [Date] objects: [new%js date_fromTimeValue (t)] returns a
       [Date] object initialized with the time value [t]. *)
 
 val date_month : (int -> int -> date t) constr
-(** Constructor of [Date] objects: [jsnew date_fromTimeValue (y, m)]
+(** Constructor of [Date] objects: [new%js date_fromTimeValue (y, m)]
       returns a [Date] object corresponding to year [y] and month [m]. *)
 
 val date_day : (int -> int -> int -> date t) constr
-(** Constructor of [Date] objects: [jsnew date_fromTimeValue (y, m, d)]
+(** Constructor of [Date] objects: [new%js date_fromTimeValue (y, m, d)]
       returns a [Date] object corresponding to year [y], month [m] and
       day [d]. *)
 
 val date_hour : (int -> int -> int -> int -> date t) constr
-(** Constructor of [Date] objects: [jsnew date_fromTimeValue (y, m, d, h)]
+(** Constructor of [Date] objects: [new%js date_fromTimeValue (y, m, d, h)]
       returns a [Date] object corresponding to year [y] to hour [h]. *)
 
 val date_min : (int -> int -> int -> int -> int -> date t) constr
-(** Constructor of [Date] objects: [jsnew date_fromTimeValue (y, m, d, h, m')]
+(** Constructor of [Date] objects: [new%js date_fromTimeValue (y, m, d, h, m')]
       returns a [Date] object corresponding to year [y] to minute [m']. *)
 
 val date_sec : (int -> int -> int -> int -> int -> int -> date t) constr
 (** Constructor of [Date] objects:
-      [jsnew date_fromTimeValue (y, m, d, h, m', s)]
+      [new%js date_fromTimeValue (y, m, d, h, m', s)]
       returns a [Date] object corresponding to year [y] to second [s]. *)
 
 val date_ms : (int -> int -> int -> int -> int -> int -> int -> date t) constr
 (** Constructor of [Date] objects:
-      [jsnew date_fromTimeValue (y, m, d, h, m', s, ms)]
+      [new%js date_fromTimeValue (y, m, d, h, m', s, ms)]
       returns a [Date] object corresponding to year [y]
       to millisecond [ms]. *)
 
@@ -678,15 +678,28 @@ class type error =
 
 val error_constr : (js_string t -> error t) constr
 (** Constructor of [Error] objects:
-      [jsnew error_constr (msg)]
+      [new%js error_constr (msg)]
       returns an [Error] object with the message [msg]. *)
 
 val string_of_error : error t -> string
 
 val raise_js_error : error t -> 'a
 
+val exn_with_js_backtrace : exn -> force:bool -> exn
+(** Attach a JavasScript error to an OCaml exception.  if [force = false] and a
+    JavasScript error is already attached, it will do nothing. This function is useful to
+    store and retrieve information about JavaScript stack traces.
+
+    Attaching JavasScript errors will happen automatically when compiling with
+    [--enable with-js-error].
+*)
+
+val js_error_of_exn : exn -> error t opt
+(** Extract a JavaScript error attached to an OCaml exception, if any.  This is useful to
+    inspect an eventual stack strace, especially when sourcemap is enabled. *)
+
 exception Error of error t
-(** The [Error] exception wrap javascript exceptions when catched by ocaml code.
+(** The [Error] exception wrap javascript exceptions when caught by OCaml code.
       In case the javascript exception is not an instance of javascript [Error],
       it will be serialized and wrapped into a [Failure] exception.
   *)
@@ -743,12 +756,12 @@ external bool : bool -> bool t = "caml_js_from_bool"
 external to_bool : bool t -> bool = "caml_js_to_bool"
 (** Conversion of booleans from Javascript to OCaml. *)
 
-external string : string -> js_string t = "caml_js_from_string"
+external string : string -> js_string t = "caml_jsstring_of_string"
 (** Conversion of strings from OCaml to Javascript.  (The OCaml
       string is considered to be encoded in UTF-8 and is converted to
       UTF-16.) *)
 
-external to_string : js_string t -> string = "caml_js_to_string"
+external to_string : js_string t -> string = "caml_string_of_jsstring"
 (** Conversion of strings from Javascript to OCaml. *)
 
 external array : 'a array -> 'a js_array t = "caml_js_from_array"
@@ -761,7 +774,7 @@ external bytestring : string -> js_string t = "caml_jsbytes_of_string"
 (** Conversion of strings of bytes from OCaml to Javascript.
       (Each byte will be converted in an UTF-16 code point.) *)
 
-external to_bytestring : js_string t -> string = "caml_js_to_byte_string"
+external to_bytestring : js_string t -> string = "caml_string_of_jsbytes"
 (** Conversion of strings of bytes from Javascript to OCaml.  (The
       Javascript string should only contain UTF-16 code points below
       255.) *)
@@ -930,7 +943,9 @@ module Unsafe : sig
   external new_obj : 'a -> any array -> 'b = "caml_js_new"
   (** Create a Javascript object.  The expression [new_obj c a]
         creates a Javascript object with constructor [c] using the
-        arguments given by the array [a]. *)
+        arguments given by the array [a].
+        Example: [Js.new_obj (Js.Unsafe.variable "ArrayBuffer") [||]]
+  *)
 
   external new_obj_arr : 'a -> any_js_array -> 'b = "caml_ojs_new_arr"
   (** Same Create a Javascript object.  The expression [new_obj_arr c a]

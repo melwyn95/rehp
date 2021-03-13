@@ -65,13 +65,13 @@ type t =
   | GRAB
   | CLOSURE
   | CLOSUREREC
-  | OFFSETCLOSUREM2
+  | OFFSETCLOSUREM3
   | OFFSETCLOSURE0
-  | OFFSETCLOSURE2
+  | OFFSETCLOSURE3
   | OFFSETCLOSURE
-  | PUSHOFFSETCLOSUREM2
+  | PUSHOFFSETCLOSUREM3
   | PUSHOFFSETCLOSURE0
-  | PUSHOFFSETCLOSURE2
+  | PUSHOFFSETCLOSURE3
   | PUSHOFFSETCLOSURE
   | GETGLOBAL
   | PUSHGETGLOBAL
@@ -191,13 +191,14 @@ type desc =
   { code : t
   ; kind : kind
   ; name : string
-  ; opcode : int }
+  ; opcode : int
+  }
 
 let ops =
   let if_v407 =
     match Ocaml_version.v with
     | `V4_02 | `V4_03 | `V4_04 | `V4_06 -> fun _ -> K_will_not_happen
-    | `V4_07 | `V4_08 | `V4_09 -> fun k -> k
+    | `V4_07 | `V4_08 | `V4_09 | `V4_10 | `V4_11 | `V4_12 -> fun k -> k
   in
   let instrs =
     [| ACC0, KNullary, "ACC0"
@@ -245,13 +246,13 @@ let ops =
      ; GRAB, KUnary, "GRAB"
      ; CLOSURE, KClosure, "CLOSURE"
      ; CLOSUREREC, KClosurerec, "CLOSUREREC"
-     ; OFFSETCLOSUREM2, KNullary, "OFFSETCLOSUREM2"
+     ; OFFSETCLOSUREM3, KNullary, "OFFSETCLOSUREM3"
      ; OFFSETCLOSURE0, KNullary, "OFFSETCLOSURE0"
-     ; OFFSETCLOSURE2, KNullary, "OFFSETCLOSURE2"
+     ; OFFSETCLOSURE3, KNullary, "OFFSETCLOSURE3"
      ; OFFSETCLOSURE, KUnary, "OFFSETCLOSURE"
-     ; PUSHOFFSETCLOSUREM2, KNullary, "PUSHOFFSETCLOSUREM2"
+     ; PUSHOFFSETCLOSUREM3, KNullary, "PUSHOFFSETCLOSUREM3"
      ; PUSHOFFSETCLOSURE0, KNullary, "PUSHOFFSETCLOSURE0"
-     ; PUSHOFFSETCLOSURE2, KNullary, "PUSHOFFSETCLOSURE2"
+     ; PUSHOFFSETCLOSURE3, KNullary, "PUSHOFFSETCLOSURE3"
      ; PUSHOFFSETCLOSURE, KUnary, "PUSHOFFSETCLOSURE"
      ; GETGLOBAL, KUnary, "GETGLOBAL"
      ; PUSHGETGLOBAL, KUnary, "PUSHGETGLOBAL"
@@ -349,10 +350,11 @@ let ops =
      ; RERAISE, KStop 0, "RERAISE"
      ; RAISE_NOTRACE, KStop 0, "RAISE_NOTRACE"
      ; GETSTRINGCHAR, if_v407 KNullary, "GETSTRINGCHAR"
-     ; FIRST_UNIMPLEMENTED_OP, K_will_not_happen, "FIRST_UNIMPLEMENTED_OP" |]
+     ; FIRST_UNIMPLEMENTED_OP, K_will_not_happen, "FIRST_UNIMPLEMENTED_OP"
+    |]
   in
   let ops =
-    Array.mapi ~f:(fun i (c, k, n) -> {code = c; kind = k; name = n; opcode = i}) instrs
+    Array.mapi ~f:(fun i (c, k, n) -> { code = c; kind = k; name = n; opcode = i }) instrs
   in
   ops
 

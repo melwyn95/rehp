@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
-open Stdlib
+open! Stdlib
 open Code
 open Flow
 
@@ -27,10 +27,8 @@ let rec function_cardinality info x acc =
     (fun x ->
       match info.info_defs.(Var.idx x) with
       | Expr (Closure (l, _)) -> Some (List.length l)
-      (* If this is an already inlined extern closure wrapping primitive,
-       * return that primitive's arity *)
-      | Expr (Prim (Extern "%closure", [Pc (IString prim)])) -> (
-        try Some (Primitive.registered_arity prim) with Not_found -> None)
+      | Expr (Prim (Extern "%closure", [ Pc (IString prim) ])) -> (
+          try Some (Primitive.arity prim) with Not_found -> None)
       | Expr (Apply (f, l, _)) -> (
           if List.mem f ~set:acc
           then None
@@ -69,9 +67,10 @@ let specialize_instr info (acc, free_pc, extra) i =
             let params' = Array.to_list params' in
             let return' = Code.Var.fresh () in
             { params = params'
-            ; body = [Let (return', Apply (f, l @ params', true))]
+            ; body = [ Let (return', Apply (f, l @ params', true)) ]
             ; branch = Return return'
-            ; handler = None }
+            ; handler = None
+            }
           in
           ( Let (x, Closure (missing, (free_pc, missing))) :: acc
           , free_pc + 1
@@ -91,7 +90,7 @@ let specialize_instrs info p =
           List.fold_left extra ~init:blocks ~f:(fun blocks (pc, b) ->
               Addr.Map.add pc b blocks)
         in
-        Addr.Map.add pc {block with Code.body} blocks, free_pc)
+        Addr.Map.add pc { block with Code.body } blocks, free_pc)
       p.blocks
       (Addr.Map.empty, p.free_pc)
   in

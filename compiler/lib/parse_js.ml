@@ -16,160 +16,172 @@
  * license.txt for more details.
  *)
 
-let strip_comment l= List.filter (fun x -> not (Js_token.is_comment x)) l
+open! Stdlib
 
-let rec until_non_comment acc = function
-  | [] -> acc,None
-  | x::xs ->
-    if Js_token.is_comment x
-    then until_non_comment (x::acc) xs
-    else (acc, Some (x,xs))
+module Lexer = struct
+  type t = Lexing.lexbuf
 
-let adjust_tokens ?(keep_comment=true) l = match until_non_comment [] l with
-  | acc,None when keep_comment -> List.rev acc
-  | _,None -> []
-  | past,Some (first,rest) ->
-    let open Js_token in
-    let f prev x acc = match prev, x with
-      (* restricted productions *)
-      (* 7.9.1 - 3 *)
-      (* When, as the program is parsed from left to right, a token is encountered *)
-      (* that is allowed by some production of the grammar, but the production *)
-      (* is a restricted production and the token would be the first token for a *)
-      (* terminal or nonterminal immediately following the annotation [no LineTerminator here] *)
-      (* within the restricted production (and therefore such a token is called a restricted token), *)
-      (* and the restricted token is separated from the previous token by at least *)
-      (* one LineTerminator, then a semicolon is automatically inserted before the *)
-      (* restricted token. *)
-      | (T_RETURN _ | T_CONTINUE _ | T_BREAK _ | T_THROW _),(T_SEMICOLON _ | T_VIRTUAL_SEMICOLON _) ->
-        x::acc
-      | (T_RETURN _ | T_CONTINUE _ | T_BREAK _ | T_THROW _),_ ->
-        let x' = Js_token.info_of_tok x in
-        let prev' = Js_token.info_of_tok prev in
-        if prev'.Parse_info.line <> x'.Parse_info.line
-        then x::(Js_token.T_VIRTUAL_SEMICOLON x')::acc
-        else x::acc
-      | _, _ -> x::acc in
-    let rec aux prev acc = function
-      | [] -> List.rev acc
-      | e::l ->
-        let nprev,nacc =
-          if Js_token.is_comment e
-          then if keep_comment then prev,(e::acc) else prev,acc
-          else e,(f prev e acc) in
-        aux nprev nacc l in
-    let past = if keep_comment then past else [] in
-    aux first (first::past) rest
+  let of_file file : t =
+    let ic = open_in file in
+    let lexbuf = Lexing.from_channel ic in
+    { lexbuf with lex_curr_p = { lexbuf.lex_curr_p with pos_fname = file } }
 
-type lexer = Js_token.token list
+  let of_channel ci : t = Lexing.from_channel ci
 
-let lexer_aux ?(rm_comment=true) lines_info lexbuf =
-  let rec loop lexbuf extra lines_info prev acc =
-    let tokinfo lexbuf =
-      let pi = Parse_info.t_of_lexbuf lines_info lexbuf in
-      let pi = match prev with
-        | None -> { pi with Parse_info.fol=Some true}
-        | Some prev ->
-          let prev_pi = Js_token.info_of_tok prev in
-          if prev_pi.Parse_info.line <> pi.Parse_info.line
-          then {pi with Parse_info.fol=Some true}
-          else pi in
-      match extra with
-      | None -> pi
-      | Some (file,offset) ->
-         let src = Parse_info.relative_path lines_info file in
-         { pi with Parse_info.
-           src;
-           name = Some file;
-           line = pi.Parse_info.line - offset } in
-    let t = Js_lexer.initial tokinfo prev lexbuf in
-    match t with
-      | Js_token.EOF _ -> List.rev acc
-      | _ ->
-        let extra = match t with
-          | Js_token.TComment (ii,cmt) when String.length cmt > 1 && cmt.[0] = '#' ->
-            let lexbuf = Lexing.from_string cmt in
-            begin
-              try
-                let file,line = Js_lexer.pos lexbuf in
-                match extra with
-                | None -> Some (file, ii.Parse_info.line - ( line - 2))
-                | Some (_,offset) -> Some (file, ii.Parse_info.line - (line - 2) + offset)
-              with _ -> extra end
-          | _ -> extra in
-        let prev =
-          if Js_token.is_comment t
-          then prev
-          else Some t in
-        loop lexbuf extra lines_info prev (t::acc)
-  in
-  let toks = loop lexbuf None lines_info None [] in
-  (* hack: adjust tokens *)
-  adjust_tokens ~keep_comment:(not rm_comment) toks
-
-let lexer_from_file ?rm_comment file : lexer =
-  let lines_info = Parse_info.make_lineinfo_from_file file in
-  let ic = open_in file in
-  let lexbuf = Lexing.from_channel ic in
-  let lexer = lexer_aux ?rm_comment lines_info lexbuf in
-  close_in ic;
-  lexer
-
-let lexer_from_channel ?rm_comment ci : lexer =
-  let lines_info,str = Parse_info.make_lineinfo_from_channel ci in
-  let lexbuf = Lexing.from_string str in
-  lexer_aux ?rm_comment lines_info lexbuf
-
-let lexer_from_string ?rm_comment ?offset str : lexer =
-  let lines_info = Parse_info.make_lineinfo_from_string ?offset str in
-  let lexbuf = Lexing.from_string str in
-  lexer_aux ?rm_comment lines_info lexbuf
-
-let lexer_map = List.map
-let lexer_fold f acc l = List.fold_left f acc l
-let lexer_filter f l = List.filter f l
-let lexer_from_list l = adjust_tokens l
+  let of_lexbuf lexbuf : t = lexbuf
+end
 
 exception Parsing_error of Parse_info.t
 
-type st = {
-  mutable rest : Js_token.token list;
-  mutable current : Js_token.token ;
-  mutable passed : Js_token.token list;
-  mutable eof : bool }
+let parse_aux the_parser lexbuf =
+  let init = the_parser lexbuf.Lexing.lex_start_p in
+  let reset lexbuf =
+    lexbuf.Lexing.lex_curr_p <- lexbuf.Lexing.lex_start_p;
+    lexbuf.Lexing.lex_curr_pos <- lexbuf.Lexing.lex_start_pos
+  in
+  let fol prev (tok : Js_token.t) =
+    match prev with
+    | [] -> true
+    | p :: _ -> (Js_token.info p).Parse_info.line <> (Js_token.info tok).Parse_info.line
+  in
+  let rec loop_error prev checkpoint =
+    let module I = Js_parser.MenhirInterpreter in
+    match checkpoint with
+    | I.InputNeeded _env ->
+        let checkpoint =
+          I.offer
+            checkpoint
+            ( Js_token.EOF Parse_info.zero
+            , lexbuf.Lexing.lex_curr_p
+            , lexbuf.Lexing.lex_curr_p )
+        in
+        loop_error prev checkpoint
+    | I.Shifting _ | I.AboutToReduce _ -> loop_error prev (I.resume checkpoint)
+    | I.Accepted _ -> assert false
+    | I.Rejected -> `Error prev
+    | I.HandlingError _ -> loop_error prev (I.resume checkpoint)
+  in
+  let rec loop prev comments (last_checkpoint, checkpoint) =
+    let module I = Js_parser.MenhirInterpreter in
+    match checkpoint with
+    | I.InputNeeded _env ->
+        let inputneeded = checkpoint in
+        let token, comments =
+          match prev with
+          | (Js_token.EOF _ as prev) :: _ -> prev, comments
+          | _ ->
+              let rec read_one comments lexbuf =
+                match Js_lexer.main lexbuf with
+                | (TCommentLineDirective _ | TComment _) as t ->
+                    read_one (t :: comments) lexbuf
+                | t -> t, comments
+              in
+              let t, comments = read_one comments lexbuf in
+              let t =
+                match prev, t with
+                (* restricted productions
+                 * 7.9.1 - 3
+                 * When, as the program is parsed from left to right, a token is encountered
+                 * that is allowed by some production of the grammar, but the production
+                 * is a restricted production and the token would be the first token for a
+                 * terminal or nonterminal immediately following the annotation [no LineTerminator here]
+                 * within the restricted production (and therefore such a token is called a restricted token),
+                 * and the restricted token is separated from the previous token by at least
+                 * one LineTerminator, then a semicolon is automatically inserted before the
+                 * restricted token. *)
+                | ( (T_RETURN _ | T_CONTINUE _ | T_BREAK _ | T_THROW _) :: _
+                  , ((T_SEMICOLON _ | T_VIRTUAL_SEMICOLON _) as t) ) ->
+                    t
+                | (T_RETURN _ | T_CONTINUE _ | T_BREAK _ | T_THROW _) :: _, t
+                  when fol prev t ->
+                    reset lexbuf;
+                    T_VIRTUAL_SEMICOLON Parse_info.zero
+                (* The practical effect of these restricted productions is as follows:
+                 * When a ++ or -- token is encountered where the parser would treat it
+                 * as a postfix operator, and at least one LineTerminator occurred between
+                 * the preceding token and the ++ or -- token, then a semicolon is automatically
+                 * inserted before the ++ or -- token. *)
+                | _, (T_DECR cpi as tok) when not (fol prev tok) -> Js_token.T_DECR_NB cpi
+                | _, (T_INCR cpi as tok) when not (fol prev tok) -> Js_token.T_INCR_NB cpi
+                | _, ((T_DIV _ | T_DIV_ASSIGN _) as tok) ->
+                    if I.acceptable checkpoint tok lexbuf.Lexing.lex_start_p
+                    then tok
+                    else (
+                      reset lexbuf;
+                      Js_lexer.main_regexp lexbuf)
+                | _, t -> t
+              in
+              t, comments
+        in
+        let last_checkpoint = prev, comments, inputneeded in
+        let checkpoint =
+          I.offer checkpoint (token, lexbuf.Lexing.lex_start_p, lexbuf.Lexing.lex_curr_p)
+        in
+        loop (token :: prev) comments (last_checkpoint, checkpoint)
+    | I.Shifting _ | I.AboutToReduce _ ->
+        loop prev comments (last_checkpoint, I.resume checkpoint)
+    | I.Accepted v -> `Ok (v, prev, comments)
+    | I.Rejected -> `Error prev
+    | I.HandlingError _ -> (
+        (* 7.9.1 - 1 *)
+        (* When, as the program is parsed from left to right, a token (called the offending token)
+           is encountered that is not allowed by any production of the grammar, then a semicolon
+           is automatically inserted before the offending token if one or more of the following
+           conditions is true:
+           - The offending token is }.
+           - The offending token is separated from the previous
+             token by at least one LineTerminator. *)
 
-let parse_aux the_parser toks =
-  let state = match toks with
-    | [] -> {
-      rest = [];
-      passed = [];
-      current = Js_token.EOF Parse_info.zero;
-      eof = false }
-    | hd :: _ -> {
-      rest = toks;
-      passed = [];
-      current = hd ;
-      eof = false } in
-  let lexer_fun _lb =
-    match state.rest with
-      | [] when not state.eof ->
-        state.eof <- true;
-        let info = Js_token.info_of_tok state.current in
-        Js_token.EOF info
-      | [] -> assert false
-      | x::tl ->
-        state.rest <- tl;
-        state.current <- x;
-        state.passed <- x::state.passed;
-        x in
-  let lexbuf = Lexing.from_string "" in
-  try the_parser lexer_fun lexbuf
-  with
-    | Js_parser.Error
-    | Parsing.Parse_error ->
-      let pi = Js_token.info_of_tok state.current in
+        (* 7.9.1 - 2 *)
+        (* When, as the program is parsed from left to right, the end of the input stream of tokens *)
+        (* is encountered and the parser is unable to parse the input token stream as a single *)
+        (* complete ECMAScript Program, then a semicolon is automatically inserted at the end *)
+        let insert_virtual_semmit =
+          match prev with
+          | [] | T_VIRTUAL_SEMICOLON _ :: _ -> false
+          | T_RCURLY _ :: _ -> true
+          | EOF _ :: _ -> true
+          | offending :: before :: _ when fol [ before ] offending -> true
+          | _ -> false
+        in
+        match insert_virtual_semmit with
+        | false -> loop_error prev (I.resume checkpoint)
+        | true ->
+            let error_checkpoint = checkpoint in
+            let error_prev = prev in
+            let prev, comments, checkpoint = last_checkpoint in
+            if I.acceptable
+                 checkpoint
+                 (Js_token.T_VIRTUAL_SEMICOLON Parse_info.zero)
+                 lexbuf.Lexing.lex_curr_p
+            then (
+              reset lexbuf;
+              let t = Js_token.T_VIRTUAL_SEMICOLON Parse_info.zero in
+              let checkpoint =
+                I.offer checkpoint (t, lexbuf.Lexing.lex_curr_p, lexbuf.Lexing.lex_curr_p)
+              in
+              loop (t :: prev) comments (last_checkpoint, checkpoint))
+            else loop_error error_prev (I.resume error_checkpoint))
+  in
+  match loop [] [] (([], [], init), init) with
+  | `Ok x -> x
+  | `Error tok ->
+      let tok =
+        match tok with
+        | [] -> Js_token.EOF Parse_info.zero
+        | x :: _ -> x
+      in
+      let pi = Js_token.info tok in
       raise (Parsing_error pi)
 
-let parse lex = parse_aux Js_parser.program lex
+let parse' lex =
+  let p, t_rev, comment_rev = parse_aux Js_parser.Incremental.program lex in
+  p, List.rev t_rev, List.rev comment_rev
 
-let parse_expr lex = parse_aux Js_parser.standalone_expression lex
+let parse lex =
+  let p, _, _ = parse_aux Js_parser.Incremental.program lex in
+  p
+
+let parse_expr lex =
+  let expr, _, _ = parse_aux Js_parser.Incremental.standalone_expression lex in
+  expr

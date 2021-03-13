@@ -30,12 +30,11 @@
  *)
 
 module J = Javascript
-open Js_token
 
 let var pi name = J.ident ~loc:(Pi pi) name
 
 (* This is need to fake menhir while using `--infer`. *)
-let _tok = EOF Parse_info.zero
+(* let _tok = EOF Parse_info.zero *)
 
 %}
 
@@ -48,9 +47,9 @@ let _tok = EOF Parse_info.zero
 (*-----------------------------------------*)
 
 (* Tokens with a value *)
-%token<string * float * Parse_info.t> T_NUMBER
+%token<string * Parse_info.t> T_NUMBER
 %token<string * Parse_info.t> T_IDENTIFIER
-%token<string * Parse_info.t> T_STRING
+%token<string * Parse_info.t * int> T_STRING
 %token<string * Parse_info.t> T_REGEX
 
 (* Keywords tokens *)
@@ -71,6 +70,7 @@ T_LPAREN T_RPAREN
 T_LBRACKET T_RBRACKET
 T_SEMICOLON
 T_COMMA
+T_SPREAD
 T_PERIOD
 
 (* Operators *)
@@ -99,6 +99,10 @@ T_NOT T_BIT_NOT T_INCR T_DECR T_INCR_NB T_DECR_NB T_DELETE T_TYPEOF T_VOID
 (*-----------------------------------------*)
 
 %token <Parse_info.t> T_VIRTUAL_SEMICOLON
+%token <string * Parse_info.t> TUnknown
+%token <string * Parse_info.t> TComment
+%token <string * Parse_info.t> TCommentLineDirective
+
 
 (* classic *)
 %token <Parse_info.t> EOF
@@ -158,10 +162,6 @@ statement_no_semi:
  | block=curly_block(statement*)
    { let statements, pi_start, _pi_end = block in
      J.Block statements, J.Pi pi_start }
- (* this is not allowed but some browsers accept it *)
- (* | function_declaration { *)
- (*  let var,params,body,_ = $1 in *)
- (*  J.Variable_statement [var,Some (J.EFun((None,params,body),None))]} *)
  | s=if_statement
  | s=while_statement
  | s=for_statement
@@ -185,37 +185,6 @@ statement_need_semi:
 statement:
  | s=statement_no_semi { s }
  | s=statement_need_semi either(T_SEMICOLON, T_VIRTUAL_SEMICOLON) { s }
- | statement=statement_need_semi {
-    (* 7.9.1 - 1 *)
-    (* When, as the program is parsed from left to right, a token (called the offending token)
-       is encountered that is not allowed by any production of the grammar, then a semicolon
-       is automatically inserted before the offending token if one or more of the following
-       conditions is true:
-       - The offending token is }.
-       - The offending token is separated from the previous
-         token by at least one LineTerminator. *)
-
-    (* 7.9.1 - 2 *)
-    (* When, as the program is parsed from left to right, the end of the input stream of tokens *)
-    (* is encountered and the parser is unable to parse the input token stream as a single *)
-    (* complete ECMAScript Program, then a semicolon is automatically inserted at the end *)
-    (* of the input stream. *)
-
-    (* @@@@@@@@@ HACK @@@@@@@@@@ *)
-    (* menhir internal's         *)
-    (* look the current token:   *)
-    (* - if it is on another line (linebreak inbetween), accept the statement *)
-    (* - fail otherwise *)
-    (* @@@@@@@@@ HACK @@@@@@@@@@ *)
-
-    match _tok with
-      | EOF _ | T_RCURLY _ -> statement
-      | token ->
-        let info = Js_token.info_of_tok token in
-        match info.Parse_info.fol with
-          | Some true -> statement
-          | _ -> $syntaxerror
-  }
 
 labeled_statement:
 | l=label T_COLON s=statement { J.Labelled_statement (l, s), J.N }
@@ -415,9 +384,8 @@ primary_expression_no_statement:
  | variable_with_loc { let (i, pi) = $1 in (pi, J.EVar i) }
  | n=null_literal    { n }
  | b=boolean_literal { b }
- | numeric_literal   { let (start, n) = $1 in (start, J.ENum n) }
- | T_STRING          { let (s, start) = $1 in (start, J.EStr (s, `Utf8)) }
-   (* marcel: this isn't an expansion of literal in ECMA-262... mistake? *)
+ | numeric_literal   { let (start, n) = $1 in (start, J.ENum (J.Num.of_string_unsafe n)) }
+ | T_STRING          { let (s, start, _len) = $1 in (start, J.EStr (s, `Utf8)) }
  | r=regex_literal                { r }
  | a=array_literal                { a }
  | pi=T_LPAREN e=expression T_RPAREN { (pi, e) }
@@ -521,7 +489,7 @@ boolean_literal:
  | pi=T_FALSE { (pi, J.EBool false) }
 
 numeric_literal:
- | T_NUMBER { let (_, f, pi) = $1 in (pi, f) }
+ | T_NUMBER { let (f, pi) = $1 in (pi, f) }
 
 regex_literal:
  | T_REGEX {
@@ -535,7 +503,6 @@ regex_literal:
        String.sub s 1 (i - 1),Some (String.sub s (i+1) (len - i - 1))
    in
    (pi, J.ERegexp (regexp, option)) }
-   (* J.ENew(J.EVar (var "RegExp"), Some (List.map (fun s -> J.EStr (s,`Bytes)) args)) } *)
 
 (*----------------------------*)
 (* 2 array                    *)
@@ -576,8 +543,12 @@ object_key_value:
 (* 2 function call            *)
 (*----------------------------*)
 
+arg:
+ | T_SPREAD arg=assignment_expression { arg, `Spread }
+ | arg=assignment_expression { arg, `Not_spread }
+
 arguments:
- | args=parenthesised(separated_list(T_COMMA, assignment_expression)) { args }
+ | args=parenthesised(separated_list(T_COMMA, arg)) { args }
 
 (*----------------------------*)
 (* 2 auxiliary bis            *)
@@ -586,9 +557,6 @@ arguments:
 (*************************************************************************)
 (* 1 Entities, names                                                     *)
 (*************************************************************************)
-
-identifier:
- | T_IDENTIFIER { fst $1 }
 
 identifier_or_kw:
    | T_IDENTIFIER { fst $1 }
@@ -634,8 +602,9 @@ label:
 
 property_name:
  | i=identifier_or_kw { J.PNI i }
- | s=T_STRING         { J.PNS (fst s) }
- | n=numeric_literal  { J.PNN (snd n) }
+ | s=T_STRING         {
+    let s, _info, _len = s in J.PNS s }
+ | n=numeric_literal  { J.PNN (J.Num.of_string_unsafe (snd n)) }
 
 (*************************************************************************)
 (* 1 xxx_opt, xxx_list                                                   *)

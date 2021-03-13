@@ -31,40 +31,6 @@ let get_static_env s = try Some (Hashtbl.find static_env s) with Not_found -> No
 
 module Int = Int32
 
-let the_option_of info x =
-  match x with
-  | Pv x ->
-      get_approx
-        info
-        (fun x ->
-          match info.info_defs.(Var.idx x) with
-          | Expr (Constant (Int i)) -> `CConst (Int32.to_int i)
-          | Expr (Block (0, _, _)) ->
-              if info.info_possibly_mutable.(Var.idx x) then `Unknown else `Block
-          | Expr (Constant (Tuple (0, [| a |], _))) -> `CBlock a
-          | _ -> `Unknown)
-        `Unknown
-        (fun u v ->
-          match u, v with
-          | `Block, `Block -> u
-          | `CBlock a, `CBlock b -> if Poly.equal a b then u else `Unknown
-          | `CConst i, `CConst j when i = j -> u
-          | `Unknown, _
-          | `Block, (`Unknown | `CBlock _ | `CConst _)
-          | `CBlock _, (`Unknown | `Block | `CConst _)
-          | `CConst _, (`Unknown | `Block | `CBlock _ | `CConst _) ->
-              `Unknown)
-        x
-  | Pc (Int i) -> `CConst (Int32.to_int i)
-  | Pc (Tuple (0, [| a |], _)) -> `CBlock a
-  | _ -> `Unknown
-
-let test_true info a =
-  (match the_int info a with
-  | Some i when i = 1l -> Some(true)
-  | Some i -> Some(false)
-  | _ -> None)
-
 let int_binop l f =
   match l with
   | [ Int i; Int j ] -> Some (Int (f i j))
@@ -333,7 +299,8 @@ let eval_instr info i =
                 ( prim
                 , List.map2 prim_args prim_args' ~f:(fun arg c ->
                       match c with
-                      | Some ((Int _ | Float _) as c) -> Pc c
+                      | Some ((Int _ | Float _ | IString _) as c) -> Pc c
+                      | Some (String _ as c) when Config.Flag.use_js_string () -> Pc c
                       | Some _
                       (* do not be duplicated other constant as
                           they're not represented with constant in javascript. *)
@@ -514,7 +481,7 @@ let drop_exception_handler blocks =
 let eval info blocks =
   Addr.Map.map
     (fun block ->
-      let body = List.concat (List.map block.body ~f:(eval_instr_expand info)) in
+      let body = List.map block.body ~f:(eval_instr info) in
       let branch = eval_branch info block.branch in
       { block with Code.body; Code.branch })
     blocks

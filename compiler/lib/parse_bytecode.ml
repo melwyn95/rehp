@@ -28,26 +28,6 @@ let debug_sourcemap = Debug.find "sourcemap"
 
 type bytecode = string
 
-let normalize_module_name s =
-  match s with
-  | "String" -> "String_"
-  | "string" -> "string_"
-  | "Array" -> "Array_"
-  | "array" -> "array_"
-  | "List" -> "List_"
-  | "list" -> "list_"
-  | _ -> s
-
-let denormalize_module_name s =
-  match s with
-  | "String_" -> "String"
-  | "string_" -> "string"
-  | "Array_" -> "Array"
-  | "array_" -> "array"
-  | "List_" -> "List"
-  | "list_" -> "list"
-  | _ -> s
-
 let predefined_exceptions =
   [ 0, "Out_of_memory"
   ; 1, "Sys_error"
@@ -65,40 +45,44 @@ let predefined_exceptions =
 
 (* Read and manipulate debug section *)
 module Debug : sig
-  type data
+  type t
 
-  val is_empty : data -> bool
+  val names : t -> bool
+
+  val toplevel : t -> bool
+
+  val enabled : t -> bool
+
+  val is_empty : t -> bool
+
+  val dbg_section_needed : t -> bool
 
   val propagate : Code.Var.t list -> Code.Var.t list -> unit
 
-  val find : data -> Code.Addr.t -> (int * string * Ident.t) list * Env.summary
+  val find : t -> Code.Addr.t -> (int * string * Ident.t) list * Env.summary
 
-  val find_loc : data -> ?after:bool -> int -> Parse_info.t option
+  val find_loc : t -> ?after:bool -> int -> Parse_info.t option
 
-  val find_source : data -> string -> string option
+  val find_source : t -> string -> string option
 
-  val mem : data -> Code.Addr.t -> bool
+  val mem : t -> Code.Addr.t -> bool
 
   val read :
-       data
-    -> crcs:(string * string option) list
-    -> includes:string list
-    -> in_channel
-    -> unit
+    t -> crcs:(string * string option) list -> includes:string list -> in_channel -> unit
 
   val read_event_list :
-       data
+       t
     -> crcs:(string * string option) list
     -> includes:string list
     -> orig:int
     -> in_channel
     -> unit
 
-  val create : unit -> data
+  val create : toplevel:bool -> bool -> t
 
-  val fold : data -> (Code.Addr.t -> Instruct.debug_event -> 'a -> 'a) -> 'a -> 'a
+  val fold : t -> (Code.Addr.t -> Instruct.debug_event -> 'a -> 'a) -> 'a -> 'a
 
-  val paths : data -> units:StringSet.t -> StringSet.t
+  val paths : t -> units:StringSet.t -> StringSet.t
 
   val hash_data_for_change_detection : data -> int
 end = struct
@@ -112,61 +96,42 @@ end = struct
     ; source : string option
     }
 
-  type data =
-    { events_by_pc : (int, debug_event * ml_unit) Hashtbl.t
+  module String_table = Hashtbl.Make (String)
+  module Int_table = Hashtbl.Make (Int)
+
+  type t =
+    { events_by_pc : (debug_event * ml_unit) Int_table.t
     ; units : (string * string, ml_unit) Hashtbl.t
+    ; pos_fname_to_source : string String_table.t
+    ; toplevel : bool
+    ; names : bool
+    ; enabled : bool
     }
 
-  (* Because OCaml's built in Hashtb hash only traverses to a certain depth
-   * we have to do some outside traversal to get a complete hash. *)
-  let hash_block block =
-    Hashtbl.hash_param 256 256 block.params
-    + Hashtbl.hash_param 256 256 block.handler
-    + List.fold_left
-        ~init:0
-        ~f:(fun cur itm -> cur + Hashtbl.hash_param 256 256 itm)
-        block.body
-    + Hashtbl.hash_param 256 256 block.branch
+  let names t = t.names
 
-  (*
-   * - ev.ev_stacksize and ev.ev_compenv.ce_stack are used to extract text
-   * names.
-   * - ev.ev_typenv is used to extract location information (for source
-   * maps etc).  For computing a changed debugdata hash, looking at
-   * stacksize/ce_stack is sufficient to detect changes in naming identifiers,
-   * but not enough to detect changes to location. So incremental
-   * compilation/hashing cannot work with source maps which require precise
-   * names and locations. The reason is that taking into account locations
-   * requires taking into account the type env in the hash which changes too
-   * much to be useful for incremental hashing. Files would change their
-   * debugdata hashes too often.
-   *
-   * See Debug.find which does:
-   *
-   *  ( Ocaml_compiler.Ident.table_contents ev.ev_stacksize ev.ev_compenv.ce_stack
-   *  , ev.ev_typenv )
-   *)
-  let hash_event_folder (key : int) (debug_event, ml_unit) cur =
-    cur
-    + key
-    + Hashtbl.hash_param
-        256
-        256
-        (Ocaml_compiler.IdentUtilities.table_contents_names_for_hashing
-           debug_event.ev_stacksize
-           debug_event.ev_compenv.ce_stack)
+  let toplevel t = t.toplevel
 
-  (* Computing a Digest of the bytes themselves might be a lot faster. *)
-  (* Hashes only the events because units includes absolute paths that change
-   * across hosts. *)
+  let enabled t = t.enabled
+
+  let dbg_section_needed t = t.names || t.toplevel || t.enabled
+
   let hash_data_for_change_detection { events_by_pc; units } =
     Hashtbl.fold hash_event_folder events_by_pc 0
 
   let relocate_event orig ev = ev.ev_pos <- (orig + ev.ev_pos) / 4
 
-  let create () = { events_by_pc = Hashtbl.create 17; units = Hashtbl.create 17 }
+  let create ~toplevel enabled =
+    let names = enabled || Config.Flag.pretty () in
+    { events_by_pc = Int_table.create 17
+    ; units = Hashtbl.create 17
+    ; pos_fname_to_source = String_table.create 17
+    ; names
+    ; toplevel
+    ; enabled
+    }
 
-  let is_empty t = Hashtbl.length t.events_by_pc = 0
+  let is_empty t = Int_table.length t.events_by_pc = 0
 
   (* TODO: Search for other extensions such as .re as well *)
   let find_ml_in_paths paths name =
@@ -176,8 +141,20 @@ end = struct
       try Some (Fs.find_in_path paths (name ^ ".ml")) with Not_found -> None)
 
   let read_event_list =
-    let read_paths ic : string list = input_value ic in
-    fun { events_by_pc; units } ~crcs ~includes ~orig ic ->
+    let rewrite_path path =
+      if Filename.is_relative path
+      then path
+      else
+        match Build_path_prefix_map.get_build_path_prefix_map () with
+        | Some map -> Build_path_prefix_map.rewrite (Build_path_prefix_map.flip map) path
+        | None -> path
+    in
+    let read_paths ic : string list = List.map (input_value ic) ~f:rewrite_path in
+    fun { events_by_pc; units; pos_fname_to_source; toplevel = _; names; enabled }
+        ~crcs
+        ~includes
+        ~orig
+        ic ->
       let crcs =
         let t = Hashtbl.create 17 in
         List.iter crcs ~f:(fun (m, crc) -> Hashtbl.add t m crc);
@@ -187,11 +164,12 @@ end = struct
       let paths = read_paths ic @ includes in
       List.iter
         evl
-        ~f:(fun ({ ev_module
-                 ; ev_loc = { Location.loc_start = { Lexing.pos_fname; _ }; _ }
-                 ; _
-                 } as ev)
-                ->
+        ~f:(fun
+             ({ ev_module
+              ; ev_loc = { Location.loc_start = { Lexing.pos_fname; _ }; _ }
+              ; _
+              } as ev)
+           ->
           let unit =
             try Hashtbl.find units (ev_module, pos_fname)
             with Not_found ->
@@ -201,6 +179,11 @@ end = struct
                 with Not_found -> (
                   try Some (Fs.find_in_path paths (Filename.basename pos_fname))
                   with Not_found -> find_ml_in_paths paths ev_module)
+              in
+              let source =
+                match source with
+                | None -> None
+                | Some source -> Some (Fs.absolute_path source)
               in
               if debug_sourcemap ()
               then
@@ -214,14 +197,19 @@ end = struct
               let u =
                 { module_name = ev_module; fname = pos_fname; crc; source; paths }
               in
+              (match pos_fname, source with
+              | "_none_", _ | _, None -> ()
+              | pos_fname, Some source ->
+                  String_table.add pos_fname_to_source pos_fname source);
               Hashtbl.add units (ev_module, pos_fname) u;
               u
           in
           relocate_event orig ev;
-          Hashtbl.add events_by_pc ev.ev_pos (ev, unit);
+          if enabled || names then Int_table.add events_by_pc ev.ev_pos (ev, unit);
           ())
-
-  (* Finds the absolute path to a source file for whichever previously registered
+  (*
+    OLD CODE
+   (* Finds the absolute path to a source file for whichever previously registered
    * project relative path matches the pos_fname argument *)
   let find_source { units; _ } pos_fname =
     let set =
@@ -242,7 +230,12 @@ end = struct
         units
         StringSet.empty
     in
-    if StringSet.cardinal set = 1 then Some (StringSet.choose set) else None
+    if StringSet.cardinal set = 1 then Some (StringSet.choose set) else None *)
+
+  let find_source { pos_fname_to_source; _ } pos_fname =
+    match String_table.find_all pos_fname_to_source pos_fname with
+    | [ x ] -> Some x
+    | [] | _ :: _ :: _ -> None
 
   let read t ~crcs ~includes ic =
     let len = input_binary_int ic in
@@ -253,23 +246,23 @@ end = struct
 
   let find { events_by_pc; _ } pc =
     try
-      let ev, _ = Hashtbl.find events_by_pc pc in
+      let ev, _ = Int_table.find events_by_pc pc in
       ( Ocaml_compiler.Ident.table_contents ev.ev_stacksize ev.ev_compenv.ce_stack
       , ev.ev_typenv )
     with Not_found -> [], Env.Env_empty
 
-  let mem { events_by_pc; _ } = Hashtbl.mem events_by_pc
+  let mem { events_by_pc; _ } = Int_table.mem events_by_pc
 
   let find_loc { events_by_pc; _ } ?(after = false) pc =
     try
       let before, (ev, unit) =
-        try false, Hashtbl.find events_by_pc pc
+        try false, Int_table.find events_by_pc pc
         with Not_found -> (
           ( true
-          , try Hashtbl.find events_by_pc (pc + 1)
+          , try Int_table.find events_by_pc (pc + 1)
             with Not_found -> (
-              try Hashtbl.find events_by_pc (pc + 2)
-              with Not_found -> Hashtbl.find events_by_pc (pc + 3)) ))
+              try Int_table.find events_by_pc (pc + 2)
+              with Not_found -> Int_table.find events_by_pc (pc + 3)) ))
       in
       let loc = ev.ev_loc in
       if loc.Location.loc_ghost
@@ -286,14 +279,7 @@ end = struct
             | _ -> loc.Location.loc_start
         in
         let src = unit.source in
-        Some
-          { Parse_info.name = Some pos.Lexing.pos_fname
-          ; src
-          ; line = pos.Lexing.pos_lnum - 1
-          ; col = pos.Lexing.pos_cnum - pos.Lexing.pos_bol
-          ; idx = 0
-          ; fol = None
-          }
+        Some (Parse_info.t_of_position ~src pos)
     with Not_found -> None
 
   let rec propagate l1 l2 =
@@ -303,7 +289,7 @@ end = struct
         propagate r1 r2
     | _ -> ()
 
-  let fold t f acc = Hashtbl.fold (fun k (e, _u) acc -> f k e acc) t.events_by_pc acc
+  let fold t f acc = Int_table.fold (fun k (e, _u) acc -> f k e acc) t.events_by_pc acc
 
   let paths t ~units =
     let paths =
@@ -320,7 +306,7 @@ end
 module Blocks : sig
   type t
 
-  val analyse : Debug.data -> bytecode -> t
+  val analyse : Debug.t -> bytecode -> t
 
   val add : t -> int -> t
 
@@ -406,6 +392,9 @@ end = struct
   let is_empty x = Array.length x <= 1
 
   let analyse debug_data code =
+    let debug_data =
+      if Debug.enabled debug_data then debug_data else Debug.create ~toplevel:false false
+    in
     let blocks = Addr.Set.empty in
     let len = String.length code / 4 in
     let blocks = add blocks 0 in
@@ -419,15 +408,35 @@ module Constants : sig
 
   val inlined : Code.constant -> bool
 end = struct
-  let same_custom x y = Obj.field x 0 == Obj.field (Obj.repr y) 0
+  (* In order to check that two custom objects share the same kind, we
+     compare their identifier.  The identifier is currently extracted
+     from the marshaled value. *)
+  let ident_of_custom x =
+    (* Make sure tags are equal to custom_tag.
+       Note that in javascript [0l] and [0n] are not encoded as custom blocks. *)
+    if Obj.tag x <> Obj.custom_tag
+    then None
+    else
+      try
+        let bin = Marshal.to_string x [] in
+        match Char.code bin.[20] with
+        | 0x12 | 0x18 | 0x19 ->
+            let last = String.index_from bin 21 '\000' in
+            let name = String.sub bin ~pos:21 ~len:(last - 21) in
+            Some name
+        | _ -> assert false
+      with _ -> assert false
 
-  let warn_overflow i i32 =
-    warn
-      "Warning: integer overflow: integer %s truncated to 0x%lx (%ld); the generated \
-       code might be incorrect.@."
-      i
-      i32
-      i32
+  let same_ident x y =
+    match y with
+    | Some y -> String.equal x y
+    | None -> false
+
+  let ident_32 = ident_of_custom (Obj.repr 0l)
+
+  let ident_64 = ident_of_custom (Obj.repr 0L)
+
+  let ident_native = ident_of_custom (Obj.repr 0n)
 
   let rec parse x =
     if Obj.is_block x
@@ -438,28 +447,28 @@ end = struct
       else if tag = Obj.double_tag
       then Float (Obj.magic x : float)
       else if tag = Obj.double_array_tag
-      then Float_array (Obj.magic x : float array)
-      else if tag = Obj.custom_tag && same_custom x 0l
-      then Int (Obj.magic x : int32)
-      else if tag = Obj.custom_tag && same_custom x 0n
-      then (
-        let i : nativeint = Obj.magic x in
-        let i32 = Nativeint.to_int32 i in
-        let i' = Nativeint.of_int32 i32 in
-        if Poly.(i' <> i) then warn_overflow (Printf.sprintf "0x%nx (%nd)" i i) i32;
-        Int i32)
-      else if tag = Obj.custom_tag && same_custom x 0L
-      then Int64 (Obj.magic x : int64)
+      then Float_array (Array.init (Obj.size x) ~f:(fun i -> Obj.double_field x i))
+      else if tag = Obj.custom_tag
+      then
+        match ident_of_custom x with
+        | Some name when same_ident name ident_32 -> Int (Obj.magic x : int32)
+        | Some name when same_ident name ident_native ->
+            let i : nativeint = Obj.magic x in
+            Int (Int32.of_nativeint_warning_on_overflow i)
+        | Some name when same_ident name ident_64 -> Int64 (Obj.magic x : int64)
+        | Some name ->
+            failwith
+              (Printf.sprintf
+                 "parse_bytecode: Don't know what to do with custom block (%s)"
+                 name)
+        | None -> assert false
       else if tag < Obj.no_scan_tag
       then
         Tuple (tag, Array.init (Obj.size x) ~f:(fun i -> parse (Obj.field x i)), Unknown)
       else assert false
     else
       let i : int = Obj.magic x in
-      let i32 = Int32.of_int i in
-      let i' = Int32.to_int i32 in
-      if i' <> i then warn_overflow (Printf.sprintf "0x%x (%d)" i i) i32;
-      Int i32
+      Int (Int32.of_int_warning_on_overflow i)
 
   let inlined = function
     | String _ | IString _ -> false
@@ -680,13 +689,7 @@ module State = struct
     let pos = location.Location.loc_start in
     (* Debug.find_source only pays attention to debug.units *)
     let src = Debug.find_source debug pos.Lexing.pos_fname in
-    { Parse_info.name = Some pos.Lexing.pos_fname
-    ; src
-    ; line = pos.Lexing.pos_lnum - 1
-    ; col = pos.Lexing.pos_cnum - pos.Lexing.pos_bol
-    ; idx = 0
-    ; fol = None
-    }
+    Parse_info.t_of_position ~src pos
 
   let rec name_rec debug i l s summary =
     match l, s with
@@ -701,10 +704,10 @@ module State = struct
     | _ -> assert false
 
   let name_vars st debug pc =
-    (* Debug.find doesn't even pay attention to the ml module in each entry of
-     * debug.events_by_pc, and doesn't pay attention to debug.units *)
-    let l, summary = Debug.find debug pc in
-    name_rec debug 0 l st.stack summary
+    if Debug.names debug
+    then
+      let l, summary = Debug.find debug pc in
+      name_rec debug 0 l st.stack summary
 
   let rec make_stack i state =
     if i = 0
@@ -732,6 +735,25 @@ let access_global g i =
       let x = Var.fresh () in
       g.vars.(i) <- Some x;
       x
+
+(** New code
+let register_global ?(force = false) g i rem =
+  if force || g.is_exported.(i)
+  then
+    let args =
+      match g.named_value.(i) with
+      | None -> []
+      | Some name ->
+          Code.Var.name (access_global g i) name;
+          [ Pc (IString name) ]
+    in
+    Let
+      ( Var.fresh ()
+      , Prim
+          ( Extern "caml_register_global"
+          , Pc (Int (Int32.of_int i)) :: Pv (access_global g i) :: args ) )
+    :: rem
+ *)
 
 let register_global ?(definitely_not_module = false) ?(force = false) g i rem =
   if force || g.is_exported.(i)
@@ -793,20 +815,28 @@ let compiled_blocks = ref Addr.Map.empty
 
 let method_cache_id = ref 1
 
+let new_closure_repr =
+  match Ocaml_version.v with
+  | `V4_02 | `V4_03 | `V4_04 | `V4_06 | `V4_07 | `V4_08 | `V4_09 | `V4_10 | `V4_11 ->
+      false
+  | `V4_12 -> true
+
+let clo_offset_3 = if new_closure_repr then 3 else 2
+
 type compile_info =
   { blocks : Blocks.u
   ; code : string
   ; limit : int
-  ; debug : Debug.data
+  ; debug : Debug.t
   }
 
-let rec compile_block blocks debug code pc state =
+let rec compile_block blocks debug_data code pc state =
   if not (Addr.Set.mem pc !tagged_blocks)
   then (
     let limit = Blocks.next blocks pc in
     assert (limit > pc);
     let string_of_addr addr =
-      match Debug.find_loc debug addr with
+      match Debug.find_loc debug_data addr with
       | None -> string_of_int addr
       | Some loc -> (
           match loc.Parse_info.src with
@@ -823,18 +853,20 @@ let rec compile_block blocks debug code pc state =
     then Format.eprintf "Compiling from %s to %d@." (string_of_addr pc) (limit - 1);
     let state = State.start_block pc state in
     tagged_blocks := Addr.Set.add pc !tagged_blocks;
-    let instr, last, state' = compile { blocks; code; limit; debug } pc state [] in
+    let instr, last, state' =
+      compile { blocks; code; limit; debug = debug_data } pc state []
+    in
     assert (not (Addr.Map.mem pc !compiled_blocks));
     compiled_blocks := Addr.Map.add pc (state, List.rev instr, last) !compiled_blocks;
     match last with
     | Branch (pc', _) | Poptrap ((pc', _), _) ->
-        compile_block blocks debug code pc' state'
+        compile_block blocks debug_data code pc' state'
     | Cond (_, (pc1, _), (pc2, _)) ->
-        compile_block blocks debug code pc1 state';
-        compile_block blocks debug code pc2 state'
+        compile_block blocks debug_data code pc1 state';
+        compile_block blocks debug_data code pc2 state'
     | Switch (_, l1, l2) ->
-        Array.iter l1 ~f:(fun (pc', _) -> compile_block blocks debug code pc' state');
-        Array.iter l2 ~f:(fun (pc', _) -> compile_block blocks debug code pc' state')
+        Array.iter l1 ~f:(fun (pc', _) -> compile_block blocks debug_data code pc' state');
+        Array.iter l2 ~f:(fun (pc', _) -> compile_block blocks debug_data code pc' state')
     | Pushtrap _ | Raise _ | Return _ | Stop -> ())
 
 and compile infos pc state instrs =
@@ -913,7 +945,9 @@ and compile infos pc state instrs =
           infos
           (pc + 2)
           { state with
-            State.stack = State.Dummy :: State.Dummy :: State.Dummy :: state.State.stack
+            State.stack =
+              (* See interp.c *)
+              State.Dummy :: State.Dummy :: State.Dummy :: state.State.stack
           }
           instrs
     | APPLY ->
@@ -1051,9 +1085,13 @@ and compile infos pc state instrs =
         let state = if nvars > 0 then State.push state else state in
         let vals, state = State.grab nvars state in
         let x, state = State.fresh_var state in
+        let env = List.map vals ~f:(fun x -> State.Var x) in
         let env =
-          Array.of_list (State.Dummy :: List.map vals ~f:(fun x -> State.Var x))
+          let code = State.Dummy in
+          let closure_info = State.Dummy in
+          if new_closure_repr then code :: closure_info :: env else code :: env
         in
+        let env = Array.of_list env in
         if debug_parser () then Format.printf "fun %a (" Var.print x;
         let nparams =
           match (get_instr_exn code addr).Instr.code with
@@ -1088,8 +1126,15 @@ and compile infos pc state instrs =
         done;
         let env = ref (List.map vals ~f:(fun x -> State.Var x)) in
         List.iter !vars ~f:(fun (i, x) ->
-            env := State.Var x :: !env;
-            if i > 0 then env := State.Dummy :: !env);
+            let code = State.Var x in
+            let closure_info = State.Dummy in
+            if new_closure_repr
+            then env := code :: closure_info :: !env
+            else env := code :: !env;
+            if i > 0
+            then
+              let infix_tag = State.Dummy in
+              env := infix_tag :: !env);
         let env = Array.of_list !env in
         let state = !state in
         let instrs =
@@ -1101,7 +1146,8 @@ and compile infos pc state instrs =
                 | GRAB -> getu code (addr + 1) + 1
                 | _ -> 1
               in
-              let state' = State.start_function state env (i * 2) in
+              let offset = i * clo_offset_3 in
+              let state' = State.start_function state env offset in
               let params, state' = State.make_stack nparams state' in
               if debug_parser () then Format.printf ") {@.";
               let state' = State.clear_accu state' in
@@ -1113,21 +1159,22 @@ and compile infos pc state instrs =
               Let (x, Closure (List.rev params, (addr, args))) :: instr)
         in
         compile infos (pc + 3 + nfuncs) (State.acc (nfuncs - 1) state) instrs
-    | OFFSETCLOSUREM2 -> compile infos (pc + 1) (State.env_acc (-2) state) instrs
+    | OFFSETCLOSUREM3 ->
+        compile infos (pc + 1) (State.env_acc (-clo_offset_3) state) instrs
     | OFFSETCLOSURE0 -> compile infos (pc + 1) (State.env_acc 0 state) instrs
-    | OFFSETCLOSURE2 -> compile infos (pc + 1) (State.env_acc 2 state) instrs
+    | OFFSETCLOSURE3 -> compile infos (pc + 1) (State.env_acc clo_offset_3 state) instrs
     | OFFSETCLOSURE ->
         let n = gets code (pc + 1) in
         compile infos (pc + 2) (State.env_acc n state) instrs
-    | PUSHOFFSETCLOSUREM2 ->
+    | PUSHOFFSETCLOSUREM3 ->
         let state = State.push state in
-        compile infos (pc + 1) (State.env_acc (-2) state) instrs
+        compile infos (pc + 1) (State.env_acc (-clo_offset_3) state) instrs
     | PUSHOFFSETCLOSURE0 ->
         let state = State.push state in
         compile infos (pc + 1) (State.env_acc 0 state) instrs
-    | PUSHOFFSETCLOSURE2 ->
+    | PUSHOFFSETCLOSURE3 ->
         let state = State.push state in
-        compile infos (pc + 1) (State.env_acc 2 state) instrs
+        compile infos (pc + 1) (State.env_acc clo_offset_3 state) instrs
     | PUSHOFFSETCLOSURE ->
         let state = State.push state in
         let n = gets code (pc + 1) in
@@ -1493,11 +1540,9 @@ and compile infos pc state instrs =
           (pc + 2)
           { (State.push_handler state x addr) with
             State.stack =
+              (* See interp.c *)
               State.Dummy
-              :: State.Dummy
-              :: State.Dummy
-              :: State.Dummy
-              :: state.State.stack
+              :: State.Dummy :: State.Dummy :: State.Dummy :: state.State.stack
           };
         ( instrs
         , Pushtrap
@@ -2034,8 +2079,7 @@ and compile infos pc state instrs =
              , Prim
                  ( Extern "caml_get_public_method"
                  , [ Pv obj; Pv tag; Pc (Int (Int32.of_int cache)) ] ) )
-          :: Let (tag, const n)
-          :: instrs)
+           :: Let (tag, const n) :: instrs)
     | GETDYNMET ->
         let tag = State.accu state in
         let obj = State.peek 0 state in
@@ -2055,7 +2099,7 @@ and compile infos pc state instrs =
           (pc + 1)
           state
           (Let (m, Prim (Extern "caml_get_public_method", [ Pv obj; Pv tag; Pc (Int 0l) ]))
-          :: instrs)
+           :: instrs)
     | GETMETHOD ->
         let lab = State.accu state in
         let obj = State.peek 0 state in
@@ -2068,8 +2112,7 @@ and compile infos pc state instrs =
           (pc + 1)
           state
           (Let (m, Prim (Array_get, [ Pv meths; Pv lab ]))
-          :: Let (meths, Field (obj, 0))
-          :: instrs)
+           :: Let (meths, Field (obj, 0)) :: instrs)
     | STOP -> instrs, Stop, state
     | EVENT | BREAK | FIRST_UNIMPLEMENTED_OP -> assert false)
 
@@ -2152,9 +2195,9 @@ let override_global =
         let update_mod = Var.fresh_n "update_mod" in
         ( x
         , Let (x, Block (0, [| init_mod; update_mod |], NotArray))
-          :: Let (init_mod, jsmodule "CamlinternalMod" "init_mod")
-          :: Let (update_mod, jsmodule "CamlinternalMod" "update_mod")
-          :: instrs ) )
+          ::
+          Let (init_mod, jsmodule "CamlinternalMod" "init_mod")
+          :: Let (update_mod, jsmodule "CamlinternalMod" "update_mod") :: instrs ) )
   ]
 
 (* HACK END *)
@@ -2305,9 +2348,10 @@ let from_exe
         List.fold_left infos ~init:body ~f:(fun rem (name, const) ->
             let c = Var.fresh () in
             Let (c, Constant const)
-            :: Let
-                 ( Var.fresh ()
-                 , Prim (Extern "caml_js_set", [ Pv gdata; Pc (String name); Pv c ]) )
+            ::
+            Let
+              ( Var.fresh ()
+              , Prim (Extern "caml_js_set", [ Pv gdata; Pc (String name); Pv c ]) )
             :: rem)
       in
       Let (gdata, Prim (Extern "caml_get_global_data", [])) :: body
@@ -2468,7 +2512,7 @@ module Reloc = struct
     globals
 end
 
-let from_compilation_units ~includes:_ ~toplevel ~debug ~debug_data l =
+let from_compilation_units ~includes:_ ~toplevel ~debug_data l =
   let reloc = Reloc.create () in
   List.iter l ~f:(fun (compunit, code) -> Reloc.step1 reloc compunit code);
   List.iter l ~f:(fun (compunit, code) -> Reloc.step2 reloc compunit code);
@@ -2485,28 +2529,17 @@ let from_compilation_units ~includes:_ ~toplevel ~debug ~debug_data l =
         | Some x when globals.is_const.(i) -> (
             match globals.named_value.(i) with
             | None ->
+                let l = register_global globals i l in
                 let cst = globals.constants.(i) in
-                let l =
-                  match cst, Code.Var.get_name x with
-                  | (String str | IString str), None ->
-                      let l = register_global globals i l in
-                      Code.Var.name x (Printf.sprintf "cst_%s" str);
-                      l
-                  | _ -> register_global globals i l
-                in
+                (match cst, Code.Var.get_name x with
+                | (String str | IString str), None ->
+                    Code.Var.name x (Printf.sprintf "cst_%s" str)
+                | _ -> ());
                 Let (x, Constant cst) :: l
             | Some name ->
-                (* This is where we inject an operation for module
-                   loading that should incorporate the module template. *)
                 Var.name x name;
-                (* Currently, global data is a very loose dictionary registry
-                   so it's appropriate to force this to be a dictionary *)
-                Let
-                  ( x
-                  , Prim
-                      ( Extern "%caml_load_global_module"
-                      , [ Pc (IString (normalize_module_name name)) ] ) )
-                :: l)
+                Let (x, Prim (Extern "caml_js_get", [ Pv gdata; Pc (IString name) ])) :: l
+            )
         | _ -> l)
   in
   let body = Let (gdata, Prim (Extern "caml_get_global_data", [])) :: body in
@@ -2605,7 +2638,7 @@ let predefined_exceptions () =
         let v_name_js = Var.fresh () in
         let v_index = Var.fresh () in
         [ Let (v_name, Constant (String name))
-        ; Let (v_name_js, Prim (Extern "caml_js_from_string", [ Pc (IString name) ]))
+        ; Let (v_name_js, Constant (IString name))
         ; Let (v_index, Constant (Int (Int32.of_int (-index))))
         ; Let (exn, Block (248, [| v_name; v_index |], NotArray))
         ; Let

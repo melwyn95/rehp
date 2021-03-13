@@ -414,11 +414,25 @@ and touch =
     method pageY : int readonly_prop
   end
 
+and submitEvent =
+  object
+    inherit event
+
+    method submitter : element t optdef readonly_prop
+  end
+
 and dragEvent =
   object
     inherit mouseEvent
 
     method dataTransfer : dataTransfer t readonly_prop
+  end
+
+and clipboardEvent =
+  object
+    inherit event
+
+    method clipboardData : dataTransfer t readonly_prop
   end
 
 and dataTransfer =
@@ -729,6 +743,12 @@ module Event = struct
 
   let click = Dom.Event.make "click"
 
+  let copy = Dom.Event.make "copy"
+
+  let cut = Dom.Event.make "cut"
+
+  let paste = Dom.Event.make "paste"
+
   let dblclick = Dom.Event.make "dblclick"
 
   let mousedown = Dom.Event.make "mousedown"
@@ -1011,7 +1031,7 @@ class type formElement =
 
     method reset : unit meth
 
-    method onsubmit : ('self t, event t) event_listener writeonly_prop
+    method onsubmit : ('self t, submitEvent t) event_listener writeonly_prop
   end
 
 class type optGroupElement =
@@ -2147,11 +2167,15 @@ class type navigator =
 
     method platform : js_string t readonly_prop
 
+    method vendor : js_string t readonly_prop
+
     method userAgent : js_string t readonly_prop
 
     method language : js_string t optdef readonly_prop
 
     method userLanguage : js_string t optdef readonly_prop
+
+    method maxTouchPoints : int t readonly_prop
   end
 
 class type screen =
@@ -2629,7 +2653,7 @@ module CoerceTo = struct
     if def html_element == undefined
     then
       (* ie < 9 does not have HTMLElement: we have to cheat to check
-        that something is an html element *)
+         that something is an html element *)
       fun e ->
       if def (Js.Unsafe.coerce e)##.innerHTML == undefined
       then Js.null

@@ -16,14 +16,15 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-open Stdlib
+open! Stdlib
 
 let series = ref None
 
-let stop_profiling () = match !series with
+let stop_profiling () =
+  match !series with
   | Some _x ->
-    (* Spacetime.Series.save_and_close x; *)
-    series:=None
+      (* Spacetime.Series.save_and_close x; *)
+      series := None
   | None -> ()
 
 let start_profiling name =
@@ -37,9 +38,9 @@ let take_snapshot () =
   match !series with
   | None -> ()
   | Some _series ->
-    Gc.minor ();
-    (* Spacetime.Snapshot.take series; *)
-    ()
+      Gc.minor ();
+      (* Spacetime.Snapshot.take series; *)
+      ()
 
 let debugs : (string * bool ref) list ref = ref []
 
@@ -47,23 +48,20 @@ let available () = List.map !debugs ~f:fst
 
 let find s =
   let state =
-    try
-      List.assoc s !debugs
+    try List.assoc s !debugs
     with Not_found ->
       let state = ref false in
       debugs := (s, state) :: !debugs;
       state
   in
   fun () ->
-    if s = "times" then take_snapshot ();
-    not !quiet && !state
+    if String.equal s "times" then take_snapshot ();
+    (not !quiet) && !state
 
 let enable s =
-  try List.assoc s !debugs := true with Not_found ->
-    failwith (Printf.sprintf "The debug named %S doesn't exist" s)
+  try List.assoc s !debugs := true
+  with Not_found -> failwith (Printf.sprintf "The debug named %S doesn't exist" s)
 
 let disable s =
-  try List.assoc s !debugs := false with Not_found ->
-    failwith (Printf.sprintf "The debug named %S doesn't exist" s)
-
-
+  try List.assoc s !debugs := false
+  with Not_found -> failwith (Printf.sprintf "The debug named %S doesn't exist" s)

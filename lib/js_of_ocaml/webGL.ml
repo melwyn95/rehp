@@ -19,8 +19,10 @@
  *)
 
 open Js
+open! Import
 
 (** 5.1 Types *)
+
 type sizei = int
 
 type sizeiptr = int
@@ -147,7 +149,8 @@ let defaultContextAttributes =
        ; "premultipliedAlpha", inject _false
        ; "preserveDrawingBuffer", inject _false
        ; "preferLowPowerToHighPerformance", inject _false
-       ; "failIfMajorPerformanceCaveat", inject _false |])
+       ; "failIfMajorPerformanceCaveat", inject _false
+      |])
 
 type buffer
 
@@ -183,7 +186,9 @@ class type shaderPrecisionFormat =
 
 class type renderingContext =
   object
+
     (** 5.13.1 Attributes *)
+
     method canvas : Dom_html.canvasElement t readonly_prop
 
     method drawingBufferWidth : sizei readonly_prop
@@ -191,9 +196,11 @@ class type renderingContext =
     method drawingBufferHeight : sizei readonly_prop
 
     (** 5.13.2 Getting information about the context *)
+
     method getContextAttributes : contextAttributes t meth
 
     (** 5.13.3 Setting and getting state *)
+
     method activeTexture : textureUnit -> unit meth
 
     method blendColor : clampf -> clampf -> clampf -> clampf -> unit meth
@@ -247,8 +254,7 @@ class type renderingContext =
 
     method stencilFunc : depthFunction -> int -> uint -> unit meth
 
-    method stencilFuncSeparate :
-      cullFaceMode -> depthFunction -> int -> uint -> unit meth
+    method stencilFuncSeparate : cullFaceMode -> depthFunction -> int -> uint -> unit meth
 
     method stencilMask : uint -> unit meth
 
@@ -260,11 +266,13 @@ class type renderingContext =
       cullFaceMode -> stencilOp -> stencilOp -> stencilOp -> unit meth
 
     (** 5.13.4 Viewing and clipping *)
+
     method scissor : int -> int -> sizei -> sizei -> unit meth
 
     method viewport : int -> int -> sizei -> sizei -> unit meth
 
     (** 5.13.5 Buffer objects *)
+
     method bindBuffer : bufferTarget -> buffer t -> unit meth
 
     method bindBuffer_ : bufferTarget -> buffer t opt -> unit meth
@@ -292,6 +300,7 @@ class type renderingContext =
     method isBuffer : buffer t -> bool t meth
 
     (** 5.13.6 Framebuffer objects *)
+
     method bindFramebuffer : fbTarget -> framebuffer t -> unit meth
 
     method bindFramebuffer_ : fbTarget -> framebuffer t opt -> unit meth
@@ -314,6 +323,7 @@ class type renderingContext =
     method isFramebuffer : framebuffer t -> bool t meth
 
     (** 5.13.7 Renderbuffer objects *)
+
     method bindRenderbuffer : rbTarget -> renderbuffer t -> unit meth
 
     method bindRenderbuffer_ : rbTarget -> renderbuffer t opt -> unit meth
@@ -329,6 +339,7 @@ class type renderingContext =
     method renderbufferStorage : rbTarget -> format -> sizei -> sizei -> unit meth
 
     (** 5.13.8 Texture objects *)
+
     method bindTexture : texTarget -> texture t -> unit meth
 
     method bindTexture_ : texTarget -> texture t opt -> unit meth
@@ -430,9 +441,10 @@ class type renderingContext =
       -> Dom_html.videoElement t
       -> unit meth
 
-    (*
-  method texParameterf : texTarget -> texParam -> float -> unit meth
-*)
+    (* {[
+        method texParameterf : texTarget -> texParam -> float -> unit meth
+       ]}
+    *)
     method texParameteri : texTarget -> 'a texParam -> 'a -> unit meth
 
     method texSubImage2D_fromView :
@@ -488,6 +500,7 @@ class type renderingContext =
       -> unit meth
 
     (** 5.13.9 Programs and Shaders *)
+
     method attachShader : program t -> shader t -> unit meth
 
     method bindAttribLocation : program t -> uint -> js_string t -> unit meth
@@ -532,6 +545,7 @@ class type renderingContext =
     method validateProgram : program t -> unit meth
 
     (** 5.13.10 Uniforms and attributes *)
+
     method disableVertexAttribArray : uint -> unit meth
 
     method enableVertexAttribArray : uint -> unit meth
@@ -564,67 +578,67 @@ class type renderingContext =
 
     method uniform1iv : int uniformLocation t -> int js_array t -> unit meth
 
-    method uniform2f : [`vec2] uniformLocation t -> float -> float -> unit meth
+    method uniform2f : [ `vec2 ] uniformLocation t -> float -> float -> unit meth
 
     method uniform2fv_typed :
-      [`vec2] uniformLocation t -> Typed_array.float32Array t -> unit meth
+      [ `vec2 ] uniformLocation t -> Typed_array.float32Array t -> unit meth
 
-    method uniform2fv : [`vec2] uniformLocation t -> float js_array t -> unit meth
+    method uniform2fv : [ `vec2 ] uniformLocation t -> float js_array t -> unit meth
 
-    method uniform2i : [`ivec2] uniformLocation t -> int -> int -> unit meth
+    method uniform2i : [ `ivec2 ] uniformLocation t -> int -> int -> unit meth
 
-    method uniform2iv : [`ivec2] uniformLocation t -> int js_array t -> unit meth
+    method uniform2iv : [ `ivec2 ] uniformLocation t -> int js_array t -> unit meth
 
     method uniform2iv_typed :
-      [`ivec2] uniformLocation t -> Typed_array.int32Array t -> unit meth
+      [ `ivec2 ] uniformLocation t -> Typed_array.int32Array t -> unit meth
 
-    method uniform3f : [`vec3] uniformLocation t -> float -> float -> float -> unit meth
+    method uniform3f : [ `vec3 ] uniformLocation t -> float -> float -> float -> unit meth
 
     method uniform3fv_typed :
-      [`vec3] uniformLocation t -> Typed_array.float32Array t -> unit meth
+      [ `vec3 ] uniformLocation t -> Typed_array.float32Array t -> unit meth
 
-    method uniform3fv : [`vec3] uniformLocation t -> float js_array t -> unit meth
+    method uniform3fv : [ `vec3 ] uniformLocation t -> float js_array t -> unit meth
 
-    method uniform3i : [`ivec3] uniformLocation t -> int -> int -> int -> unit meth
+    method uniform3i : [ `ivec3 ] uniformLocation t -> int -> int -> int -> unit meth
 
-    method uniform3iv : [`ivec3] uniformLocation t -> int js_array t -> unit meth
+    method uniform3iv : [ `ivec3 ] uniformLocation t -> int js_array t -> unit meth
 
     method uniform3iv_typed :
-      [`ivec3] uniformLocation t -> Typed_array.int32Array t -> unit meth
+      [ `ivec3 ] uniformLocation t -> Typed_array.int32Array t -> unit meth
 
     method uniform4f :
-      [`vec4] uniformLocation t -> float -> float -> float -> float -> unit meth
+      [ `vec4 ] uniformLocation t -> float -> float -> float -> float -> unit meth
 
     method uniform4fv_typed :
-      [`vec4] uniformLocation t -> Typed_array.float32Array t -> unit meth
+      [ `vec4 ] uniformLocation t -> Typed_array.float32Array t -> unit meth
 
-    method uniform4fv : [`vec4] uniformLocation t -> float js_array t -> unit meth
+    method uniform4fv : [ `vec4 ] uniformLocation t -> float js_array t -> unit meth
 
     method uniform4i :
-      [`ivec4] uniformLocation t -> int -> int -> int -> int -> unit meth
+      [ `ivec4 ] uniformLocation t -> int -> int -> int -> int -> unit meth
 
-    method uniform4iv : [`ivec4] uniformLocation t -> int js_array t -> unit meth
+    method uniform4iv : [ `ivec4 ] uniformLocation t -> int js_array t -> unit meth
 
     method uniform4iv_typed :
-      [`ivec4] uniformLocation t -> Typed_array.int32Array t -> unit meth
+      [ `ivec4 ] uniformLocation t -> Typed_array.int32Array t -> unit meth
 
     method uniformMatrix2fv :
-      [`mat2] uniformLocation t -> bool t -> float js_array t -> unit meth
+      [ `mat2 ] uniformLocation t -> bool t -> float js_array t -> unit meth
 
     method uniformMatrix2fv_typed :
-      [`mat2] uniformLocation t -> bool t -> Typed_array.float32Array t -> unit meth
+      [ `mat2 ] uniformLocation t -> bool t -> Typed_array.float32Array t -> unit meth
 
     method uniformMatrix3fv :
-      [`mat3] uniformLocation t -> bool t -> float js_array t -> unit meth
+      [ `mat3 ] uniformLocation t -> bool t -> float js_array t -> unit meth
 
     method uniformMatrix3fv_typed :
-      [`mat3] uniformLocation t -> bool t -> Typed_array.float32Array t -> unit meth
+      [ `mat3 ] uniformLocation t -> bool t -> Typed_array.float32Array t -> unit meth
 
     method uniformMatrix4fv :
-      [`mat4] uniformLocation t -> bool t -> float js_array t -> unit meth
+      [ `mat4 ] uniformLocation t -> bool t -> float js_array t -> unit meth
 
     method uniformMatrix4fv_typed :
-      [`mat4] uniformLocation t -> bool t -> Typed_array.float32Array t -> unit meth
+      [ `mat4 ] uniformLocation t -> bool t -> Typed_array.float32Array t -> unit meth
 
     method vertexAttrib1f : uint -> float -> unit meth
 
@@ -654,6 +668,7 @@ class type renderingContext =
       uint -> int -> dataType -> bool t -> sizei -> intptr -> unit meth
 
     (** 5.13.11 Writing to the drawing buffer *)
+
     method clear : clearBufferMask -> unit meth
 
     method drawArrays : beginMode -> int -> sizei -> unit meth
@@ -665,6 +680,7 @@ class type renderingContext =
     method flush : unit meth
 
     (** 5.13.12 Reading back pixels *)
+
     method readPixels :
          int
       -> int
@@ -676,9 +692,11 @@ class type renderingContext =
       -> unit meth
 
     (** 5.13.13 Detecting context lost events *)
+
     method isContextLost : bool t meth
 
     (** 5.13.14 Detecting and enabling extensions *)
+
     method getSupportedExtensions : js_string t js_array t meth
 
     method getExtension : 'a. js_string t -> 'a t opt meth
@@ -838,11 +856,9 @@ class type renderingContext =
 
     method _LINE_WIDTH_ : float parameter readonly_prop
 
-    method _ALIASED_POINT_SIZE_RANGE_ :
-      Typed_array.float32Array t parameter readonly_prop
+    method _ALIASED_POINT_SIZE_RANGE_ : Typed_array.float32Array t parameter readonly_prop
 
-    method _ALIASED_LINE_WIDTH_RANGE_ :
-      Typed_array.float32Array t parameter readonly_prop
+    method _ALIASED_LINE_WIDTH_RANGE_ : Typed_array.float32Array t parameter readonly_prop
 
     method _CULL_FACE_MODE_ : cullFaceMode parameter readonly_prop
 
@@ -1350,8 +1366,7 @@ class type canvasElement =
   object
     method getContext : js_string t -> renderingContext t opt meth
 
-    method getContext_ :
-      js_string t -> contextAttributes t -> renderingContext t opt meth
+    method getContext_ : js_string t -> contextAttributes t -> renderingContext t opt meth
   end
 
 let getContext (c : Dom_html.canvasElement t) =

@@ -152,6 +152,8 @@ type constant =
   | Int of int32
   | Null
 
+val constant_equal : constant -> constant -> bool option
+
 type prim_arg =
   | Pv of Var.t
   | Pc of constant

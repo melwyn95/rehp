@@ -1,6 +1,11 @@
 language: c
 
-matrix:
+cache:
+    directories:
+      - $HOME/.opam
+      - $HOME/Library/Caches/Homebrew
+
+jobs:
   include:
     - os: linux
       env: OCAML_VERSION=4.02 MODE=opam
@@ -15,18 +20,22 @@ matrix:
     - os: linux
       env: OCAML_VERSION=4.07 MODE=opam
     - os: linux
-      env: OCAML_VERSION=4.07 MODE=build
-      name: "4.07 all targets"
+      env: OCAML_VERSION=4.08 MODE=opam
+    - os: linux
+      env: OCAML_VERSION=4.09 MODE=opam
+    - os: linux
+      env: OCAML_VERSION=4.10 MODE=opam
+    - os: linux
+      env: OCAML_VERSION=4.11 MODE=opam
+    - os: linux
+      env: OCAML_VERSION=4.11 MODE=build
+      name: "4.11 all targets"
     - os: osx
-      env: OCAML_VERSION=4.07 MODE=opam
+      env: OCAML_VERSION=4.11 MODE=opam
 
   allow_failures:
-    - os: linux
-      env: OCAML_VERSION=4.02 MODE=opam
-    - os: linux
-      env: OCAML_VERSION=4.03 MODE=opam
     - os: osx
-      env: OCAML_VERSION=4.07 MODE=opam
+      env: OCAML_VERSION=4.11 MODE=opam
 
   fast_finish: true
 

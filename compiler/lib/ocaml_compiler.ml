@@ -22,31 +22,26 @@ let rec constant_of_const : _ -> Code.constant =
   let open Lambda in
   let open Asttypes in
   function
-  | Const_base (Const_int i) -> Int (Int32.of_int i)
+  | Const_base (Const_int i) -> Int (Int32.of_int_warning_on_overflow i)
   | Const_base (Const_char c) -> Int (Int32.of_int (Char.code c))
-  | Const_base (Const_string (s, _)) -> String s
+  | ((Const_base (Const_string (s, _)))[@if ocaml_version < (4, 11, 0)])
+  | ((Const_base (Const_string (s, _, _)))[@if ocaml_version >= (4, 11, 0)]) ->
+      String s
   | Const_base (Const_float s) -> Float (float_of_string s)
   | Const_base (Const_int32 i) -> Int i
   | Const_base (Const_int64 i) -> Int64 i
-  | Const_base (Const_nativeint i) -> Int (Nativeint.to_int32 i)
+  | Const_base (Const_nativeint i) -> Int (Int32.of_nativeint_warning_on_overflow i)
   | Const_immstring s -> String s
   | Const_float_array sl ->
       let l = List.map ~f:(fun f -> Code.Float (float_of_string f)) sl in
       Tuple (Obj.double_array_tag, Array.of_list l, Unknown)
-  (*
-     For bucklescript,
-     - uncomment the two branches below
-     - and comment out the two last ones
-     {[
-       | Const_pointer (i,_) ->
-         Int (Int32.of_int i)
-       | Const_block (tag,_,l) ->
-         let l = Array.of_list (List.map l ~f:constant_of_const) in
-         Tuple (tag, l, Unknown)
-     ]}
-  *)
-  | Const_pointer i -> Int (Int32.of_int i)
-  | Const_block (tag, l) ->
+  | ((Const_pointer (i, _))[@if BUCKLESCRIPT]) -> Int (Int32.of_int_warning_on_overflow i)
+  | ((Const_block (tag, _, l))[@if BUCKLESCRIPT]) ->
+      let l = Array.of_list (List.map l ~f:constant_of_const) in
+      Tuple (tag, l, Unknown)
+  | ((Const_pointer i)[@ifnot BUCKLESCRIPT] [@if ocaml_version < (4, 12, 0)]) ->
+      Int (Int32.of_int_warning_on_overflow i)
+  | ((Const_block (tag, l))[@ifnot BUCKLESCRIPT]) ->
       let l = Array.of_list (List.map l ~f:constant_of_const) in
       Tuple (tag, l, Unknown)
 
@@ -68,8 +63,11 @@ let rec find_loc_in_summary ident' = function
   | (Env.Env_open (summary, _)        [@if ocaml_version <  (4,7,0)])
   | Env.Env_functor_arg (summary, _)
   | (Env.Env_constraints (summary, _) [@if ocaml_version >= (4,4,0)])
-  | (Env.Env_copy_types (summary, _)  [@if ocaml_version >= (4,6,0)])
+  | (Env.Env_copy_types (summary, _)  [@if ocaml_version >= (4,6,0)] [@if ocaml_version <  (4,10,0)])
+  | (Env.Env_copy_types (summary)     [@if ocaml_version >= (4,10,0)])
   | (Env.Env_persistent (summary, _)  [@if ocaml_version >= (4,8,0)])
+  | (Env.Env_value_unbound (summary, _, _)  [@if ocaml_version >= (4,10,0)])
+  | (Env.Env_module_unbound (summary, _, _) [@if ocaml_version >= (4,10,0)])
     -> find_loc_in_summary ident' summary
 [@@ocamlformat "disable"]
 
@@ -77,16 +75,11 @@ let rec find_loc_in_summary ident' = function
 module Tbl = struct
   open Poly
 
-  type ('a, 'b) t =
-    | Empty
-    | Node of ('a, 'b) t * 'a * 'b * ('a, 'b) t * int
-
   let empty = Empty
 
   let height = function
     | Empty -> 0
     | Node (_, _, _, _, h) -> h
-
   let create l x d r =
     let hl = height l and hr = height r in
     Node (l, x, d, r, if hl >= hr then hl + 1 else hr + 1)
@@ -144,7 +137,8 @@ end
 module Symtable = struct
   type 'a numtable =
     { num_cnt : int
-    ; num_tbl : ('a, int) Tbl.t }
+    ; num_tbl : ('a, int) Tbl.t
+    }
 
   module GlobalMap = struct
     type t = Ident.t numtable
@@ -152,7 +146,7 @@ module Symtable = struct
     let filter_global_map (p : Ident.t -> bool) gmap =
       let newtbl = ref Tbl.empty in
       Tbl.iter (fun id num -> if p id then newtbl := Tbl.add id num !newtbl) gmap.num_tbl;
-      {num_cnt = gmap.num_cnt; num_tbl = !newtbl}
+      { num_cnt = gmap.num_cnt; num_tbl = !newtbl }
 
     let find nn t =
       Tbl.find (fun x1 x2 -> String.compare (Ident.name x1) (Ident.name x2)) nn t.num_tbl
@@ -164,7 +158,7 @@ module Symtable = struct
 
   let reloc_ident name =
     let buf = Bytes.create 4 in
-    Symtable.patch_object buf [Reloc_setglobal (Ident.create_persistent name), 0];
+    Symtable.patch_object buf [ Reloc_setglobal (Ident.create_persistent name), 0 ];
     let get i = Char.code (Bytes.get buf i) in
     get 0 + (get 1 lsl 8) + (get 2 lsl 16) + (get 3 lsl 24)
 end
@@ -178,9 +172,10 @@ module Symtable = struct
     type t =
       { cnt : int
       ; (* The next number *)
-        tbl : int M.t (* The table of already numbered objects *) }
+        tbl : int M.t (* The table of already numbered objects *)
+      }
 
-    let empty = {cnt = 0; tbl = M.empty}
+    let empty = { cnt = 0; tbl = M.empty }
 
     let find key nt = M.find key nt.tbl
 
@@ -190,12 +185,12 @@ module Symtable = struct
 
     let enter nt key =
       let n = !nt.cnt in
-      nt := {cnt = n + 1; tbl = M.add key n !nt.tbl};
+      nt := { cnt = n + 1; tbl = M.add key n !nt.tbl };
       n
 
     let incr nt =
       let n = !nt.cnt in
-      nt := {cnt = n + 1; tbl = !nt.tbl};
+      nt := { cnt = n + 1; tbl = !nt.tbl };
       n
   end
 
@@ -208,18 +203,18 @@ module Symtable = struct
       Ident.Map.iter
         (fun id num -> if p id then newtbl := Ident.Map.add id num !newtbl)
         gmap.tbl;
-      {cnt = gmap.cnt; tbl = !newtbl}
+      { cnt = gmap.cnt; tbl = !newtbl }
   end
 
   let reloc_ident name =
     let buf = Bytes.create 4 in
-    Symtable.patch_object [|buf|] [Reloc_setglobal (Ident.create_persistent name), 0];
+    Symtable.patch_object [| buf |] [ Reloc_setglobal (Ident.create_persistent name), 0 ];
     let get i = Char.code (Bytes.get buf i) in
     get 0 + (get 1 lsl 8) + (get 2 lsl 16) + (get 3 lsl 24)
 end
 [@@if ocaml_version >= (4, 8, 0)]
 
-module Ident_ = struct
+module Ident = struct
   (* Copied from ocaml/typing/ident.ml *)
   type 'a tbl' =
     | Empty
@@ -228,10 +223,24 @@ module Ident_ = struct
   and 'a data =
     { ident : Ident.t
     ; data : 'a
-    ; previous : 'a data option }
+    ; previous : 'a data option
+    }
 
   type 'a tbl = 'a Ident.tbl
 
+  let rec table_contents_rec sz t rem =
+    match t with
+    | Empty -> rem
+    | Node (l, v, r, _) ->
+        table_contents_rec
+          sz
+          l
+          ((sz - v.data, Ident.name v.ident, v.ident) :: table_contents_rec sz r rem)
+
+  let table_contents sz (t : 'a tbl) =
+    List.sort
+      ~cmp:(fun (i, _, _) (j, _, _) -> compare i j)
+      (table_contents_rec sz (Obj.magic (t : 'a tbl) : 'a tbl') [])
 end
 
 (* Extensions utilities used only for jsoo *)
@@ -249,26 +258,8 @@ module IdentUtilities = struct
           l
           (Ident.name v.ident :: table_contents_rec sz r rem)
 
-  let table_contents_names_for_hashing sz (t : 'a Ident_.tbl) =
+  let table_contents_names_for_hashing sz (t : 'a Ident.tbl) =
     List.sort
       ~cmp:(fun (i) (j) -> compare i j)
-      (table_contents_rec sz (Obj.magic (t : 'a Ident_.tbl) : 'a Ident_.tbl') [])
-end
-
-module Ident = struct
-  include Ident_
-
-  let rec table_contents_rec sz t rem =
-    match t with
-    | Ident_.Empty -> rem
-    | Node (l, v, r, _) ->
-        table_contents_rec
-          sz
-          l
-          ((sz - v.data, Ident.name v.ident, v.ident) :: table_contents_rec sz r rem)
-
-  let table_contents sz (t : 'a Ident_.tbl) =
-    List.sort
-      ~cmp:(fun (i, _, _) (j, _, _) -> compare i j)
-      (table_contents_rec sz (Obj.magic (t : 'a Ident_.tbl) : 'a Ident_.tbl') [])
+      (table_contents_rec sz (Obj.magic (t : 'a Ident.tbl) : 'a Ident.tbl') [])
 end

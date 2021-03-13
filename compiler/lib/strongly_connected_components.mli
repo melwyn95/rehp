@@ -19,9 +19,12 @@
 module type S = sig
   module Id : sig
     type t
+
     module Map : Map.S with type key = t
+
     module Set : Set.S with type elt = t
   end
+
   type directed_graph = Id.Set.t Id.Map.t
   (** If (a -> set) belongs to the map, it means that there are edges
       from [a] to every element of [set].  It is assumed that no edge
@@ -31,16 +34,15 @@ module type S = sig
     | Has_loop of Id.t list
     | No_loop of Id.t
 
-  val connected_components_sorted_from_roots_to_leaf
-     : directed_graph
-    -> component array
+  val connected_components_sorted_from_roots_to_leaf : directed_graph -> component array
 
   val component_graph : directed_graph -> (component * int list) array
 end
 
 module Make (Id : sig
-    type t
-    module Map : Map.S with type key = t
-    module Set : Set.S with type elt = t
-  end) : S with module Id = Id
+  type t
 
+  module Map : Map.S with type key = t
+
+  module Set : Set.S with type elt = t
+end) : S with module Id = Id

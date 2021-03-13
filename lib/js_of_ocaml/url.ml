@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
+open! Import
 
 (* Url tampering. *)
 
@@ -57,23 +58,25 @@ let urlencode ?(with_plus = true) s =
   then escape_plus (Js.to_bytestring (Js.escape (Js.bytestring s)))
   else Js.to_bytestring (Js.escape (Js.bytestring s))
 
-(** The type for HTTP url. *)
 type http_url =
   { hu_host : string  (** The host part of the url. *)
   ; hu_port : int  (** The port for the connection if any. *)
-  ; hu_path : string list  (** The path splitted on ['/'] characters. *)
+  ; hu_path : string list  (** The path split on ['/'] characters. *)
   ; hu_path_string : string  (** The original entire path. *)
   ; hu_arguments : (string * string) list
         (** Arguments as a field-value
                                              association list.*)
-  ; hu_fragment : string  (** The fragment part (after the ['#'] character). *) }
+  ; hu_fragment : string  (** The fragment part (after the ['#'] character). *)
+  }
+(** The type for HTTP url. *)
 
-(** The type for local file urls. *)
 type file_url =
   { fu_path : string list
   ; fu_path_string : string
   ; fu_arguments : (string * string) list
-  ; fu_fragment : string }
+  ; fu_fragment : string
+  }
+(** The type for local file urls. *)
 
 type url =
   | Http of http_url
@@ -101,9 +104,12 @@ let path_of_path_string s =
   let rec aux i =
     let j = try String.index_from s i '/' with Not_found -> l in
     let word = String.sub s i (j - i) in
-    if j >= l then [word] else word :: aux (j + 1)
+    if j >= l then [ word ] else word :: aux (j + 1)
   in
-  match aux 0 with [""] -> [] | [""; ""] -> [""] | a -> a
+  match aux 0 with
+  | [ "" ] -> []
+  | [ ""; "" ] -> [ "" ]
+  | a -> a
 
 (* Arguments *)
 let encode_arguments l =
@@ -119,11 +125,11 @@ let decode_arguments_js_string s =
     else
       try
         aux
-          ( Js.Optdef.case (Js.array_get arr idx) interrupt (fun s ->
-                Js.Optdef.case (name_value_split s) interrupt (fun (x, y) ->
-                    let get = urldecode_js_string_string in
-                    get x, get y ) )
-          :: acc )
+          (Js.Optdef.case (Js.array_get arr idx) interrupt (fun s ->
+               Js.Optdef.case (name_value_split s) interrupt (fun (x, y) ->
+                   let get = urldecode_js_string_string in
+                   get x, get y))
+           :: acc)
           (pred idx)
       with Local_exn -> aux acc (pred idx)
   in
@@ -161,8 +167,8 @@ let url_of_js_string s =
                      (Js.Optdef.get (Js.array_get res 4) (fun () -> Js.bytestring ""))
                ; fu_fragment =
                    Js.to_bytestring
-                     (Js.Optdef.get (Js.array_get res 6) (fun () -> Js.bytestring "")) })
-          ) )
+                     (Js.Optdef.get (Js.array_get res 6) (fun () -> Js.bytestring ""))
+               })))
     (fun handle ->
       let res = Js.match_result handle in
       let ssl = is_secure (Js.Optdef.get (Js.array_get res 1) interrupt) in
@@ -188,44 +194,68 @@ let url_of_js_string s =
               (Js.Optdef.get (Js.array_get res 8) (fun () -> Js.bytestring ""))
         ; hu_fragment =
             urldecode_js_string_string
-              (Js.Optdef.get (Js.array_get res 10) (fun () -> Js.bytestring "")) }
+              (Js.Optdef.get (Js.array_get res 10) (fun () -> Js.bytestring ""))
+        }
       in
-      Some (if ssl then Https url else Http url) )
+      Some (if ssl then Https url else Http url))
 
 let url_of_string s = url_of_js_string (Js.bytestring s)
 
 let string_of_url = function
-  | File {fu_path = path; fu_arguments = args; fu_fragment = frag; _} -> (
+  | File { fu_path = path; fu_arguments = args; fu_fragment = frag; _ } -> (
       "file://"
       ^ String.concat "/" (List.map (fun x -> urlencode x) path)
-      ^ (match args with [] -> "" | l -> "?" ^ encode_arguments l)
-      ^ match frag with "" -> "" | s -> "#" ^ urlencode s )
+      ^ (match args with
+        | [] -> ""
+        | l -> "?" ^ encode_arguments l)
+      ^
+      match frag with
+      | "" -> ""
+      | s -> "#" ^ urlencode s)
   | Http
       { hu_host = host
       ; hu_port = port
       ; hu_path = path
       ; hu_arguments = args
-      ; hu_fragment = frag; _ } -> (
+      ; hu_fragment = frag
+      ; _
+      } -> (
       "http://"
       ^ urlencode host
-      ^ (match port with 80 -> "" | n -> ":" ^ string_of_int n)
+      ^ (match port with
+        | 80 -> ""
+        | n -> ":" ^ string_of_int n)
       ^ "/"
       ^ String.concat "/" (List.map (fun x -> urlencode x) path)
-      ^ (match args with [] -> "" | l -> "?" ^ encode_arguments l)
-      ^ match frag with "" -> "" | s -> "#" ^ urlencode s )
+      ^ (match args with
+        | [] -> ""
+        | l -> "?" ^ encode_arguments l)
+      ^
+      match frag with
+      | "" -> ""
+      | s -> "#" ^ urlencode s)
   | Https
       { hu_host = host
       ; hu_port = port
       ; hu_path = path
       ; hu_arguments = args
-      ; hu_fragment = frag; _ } -> (
+      ; hu_fragment = frag
+      ; _
+      } -> (
       "https://"
       ^ urlencode host
-      ^ (match port with 443 -> "" | n -> ":" ^ string_of_int n)
+      ^ (match port with
+        | 443 -> ""
+        | n -> ":" ^ string_of_int n)
       ^ "/"
       ^ String.concat "/" (List.map (fun x -> urlencode x) path)
-      ^ (match args with [] -> "" | l -> "?" ^ encode_arguments l)
-      ^ match frag with "" -> "" | s -> "#" ^ urlencode s )
+      ^ (match args with
+        | [] -> ""
+        | l -> "?" ^ encode_arguments l)
+      ^
+      match frag with
+      | "" -> ""
+      | s -> "#" ^ urlencode s)
 
 module Current = struct
   let l =
@@ -265,7 +295,7 @@ module Current = struct
 
   let port =
     (fun () ->
-      try Some (int_of_string (Js.to_bytestring l##.port)) with Failure _ -> None )
+      try Some (int_of_string (Js.to_bytestring l##.port)) with Failure _ -> None)
       ()
 
   let path_string = urldecode_js_string_string l##.pathname
@@ -274,9 +304,9 @@ module Current = struct
 
   let arguments =
     decode_arguments_js_string
-      ( if l##.search##charAt 0 == Js.string "?"
+      (if l##.search##charAt 0 == Js.string "?"
       then l##.search##slice_end 1
-      else l##.search )
+      else l##.search)
 
   let get_fragment () =
     (* location.hash doesn't have the same behavior depending on the browser
@@ -290,7 +320,7 @@ module Current = struct
       (fun () -> "")
       (fun res ->
         let res = Js.match_result res in
-        Js.to_string (Js.Unsafe.get res 1) )
+        Js.to_string (Js.Unsafe.get res 1))
 
   let set_fragment s = l##.hash := Js.bytestring (urlencode s)
 

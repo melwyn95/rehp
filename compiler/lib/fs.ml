@@ -15,18 +15,17 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
+open! Stdlib
 
 let rec find_in_path paths name =
   match paths with
   | [] -> raise Not_found
   | path :: rem ->
-    let file = Filename.concat path name in
-    if Sys.file_exists file
-    then file
-    else find_in_path rem name
+      let file = Filename.concat path name in
+      if Sys.file_exists file then file else find_in_path rem name
 
 let find_in_path paths name =
-  if name = "" || name = "."
+  if String.is_empty name || String.equal name "."
   then raise Not_found
   else if Filename.is_relative name
   then find_in_path paths name
@@ -34,10 +33,12 @@ let find_in_path paths name =
   then name
   else raise Not_found
 
-let absolute_path f =
-  if Filename.is_relative f
-  then Filename.concat (Sys.getcwd()) f
-  else f
+let rec concat dir filename =
+  match String.drop_prefix ~prefix:"../" filename with
+  | None -> Filename.concat dir filename
+  | Some filename -> concat (Filename.dirname dir) filename
+
+let absolute_path f = if Filename.is_relative f then concat (Sys.getcwd ()) f else f
 
 let read_file f =
   try
@@ -48,6 +49,4 @@ let read_file f =
     close_in ic;
     Bytes.unsafe_to_string s
   with e ->
-    failwith
-      (Printf.sprintf "Cannot read content of %s.\n%s"
-         f (Printexc.to_string e))
+    failwith (Printf.sprintf "Cannot read content of %s.\n%s" f (Printexc.to_string e))

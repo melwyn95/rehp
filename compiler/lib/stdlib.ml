@@ -34,6 +34,30 @@ module Poly = struct
   external equal : 'a -> 'a -> bool = "%equal"
 end
 
+module Int_replace_polymorphic_compare = struct
+  let ( < ) (x : int) y = x < y
+
+  let ( <= ) (x : int) y = x <= y
+
+  let ( <> ) (x : int) y = x <> y
+
+  let ( = ) (x : int) y = x = y
+
+  let ( > ) (x : int) y = x > y
+
+  let ( >= ) (x : int) y = x >= y
+
+  let compare (x : int) y = compare x y
+
+  let equal (x : int) y = x = y
+
+  let max (x : int) y = if x >= y then x else y
+
+  let min (x : int) y = if x <= y then x else y
+end
+
+include Int_replace_polymorphic_compare
+
 let quiet = ref false
 
 let warn fmt = Format.ksprintf (fun s -> if not !quiet then Format.eprintf "%s%!" s) fmt
@@ -68,9 +92,45 @@ module List = struct
         []
         l
     in
-    List.rev l
+    rev l
 
-  let map_tc ~f l = List.rev (List.rev_map f l)
+  let slow_map l ~f = rev (rev_map ~f l)
+
+  let rec count_map ~f l ctr =
+    match l with
+    | [] -> []
+    | [ x1 ] ->
+        let f1 = f x1 in
+        [ f1 ]
+    | [ x1; x2 ] ->
+        let f1 = f x1 in
+        let f2 = f x2 in
+        [ f1; f2 ]
+    | [ x1; x2; x3 ] ->
+        let f1 = f x1 in
+        let f2 = f x2 in
+        let f3 = f x3 in
+        [ f1; f2; f3 ]
+    | [ x1; x2; x3; x4 ] ->
+        let f1 = f x1 in
+        let f2 = f x2 in
+        let f3 = f x3 in
+        let f4 = f x4 in
+        [ f1; f2; f3; f4 ]
+    | x1 :: x2 :: x3 :: x4 :: x5 :: tl ->
+        let f1 = f x1 in
+        let f2 = f x2 in
+        let f3 = f x3 in
+        let f4 = f x4 in
+        let f5 = f x5 in
+        f1
+        ::
+        f2
+        ::
+        f3
+        :: f4 :: f5 :: (if ctr > 1000 then slow_map ~f tl else count_map ~f tl (ctr + 1))
+
+  let map l ~f = count_map ~f l 0
 
   let rec take' acc n l =
     if n = 0
@@ -82,20 +142,20 @@ module List = struct
 
   let take n l =
     let x, xs = take' [] n l in
-    List.rev x, xs
+    rev x, xs
 
   let rec last = function
     | [] -> None
-    | [x] -> Some x
+    | [ x ] -> Some x
     | _ :: xs -> last xs
 
   let sort_uniq ~compare l =
     let l = List.sort compare l in
     match l with
-    | ([] | [_]) as l -> l
+    | ([] | [ _ ]) as l -> l
     | x :: xs ->
         let rec loop prev = function
-          | [] -> [prev]
+          | [] -> [ prev ]
           | x :: rest when compare x prev = 0 -> loop prev rest
           | x :: rest -> prev :: loop x rest
         in
@@ -105,6 +165,17 @@ module List = struct
     | [] -> true
     | _ -> false
 
+  let partition_map t ~f =
+    let rec loop t fst snd =
+      match t with
+      | [] -> rev fst, rev snd
+      | x :: t -> (
+          match f x with
+          | `Fst y -> loop t (y :: fst) snd
+          | `Snd y -> loop t fst (y :: snd))
+    in
+    loop t [] []
+  
   (* Init functions Copied from stdlib, for greater compiler version compat *)
   let rec init_tailrec_aux acc i n f =
     if i >= n then acc
@@ -134,7 +205,65 @@ module List = struct
     if len < 0 then invalid_arg "List.init" else
     if len > 10_000 then rev (init_tailrec_aux [] 0 len f)
     else init_aux 0 len f
+end
 
+module Nativeint = struct
+  include Nativeint
+
+  external equal : nativeint -> nativeint -> bool = "%equal"
+end
+
+module Int32 = struct
+  include Int32
+
+  external ( < ) : int32 -> int32 -> bool = "%lessthan"
+
+  external ( <= ) : int32 -> int32 -> bool = "%lessequal"
+
+  external ( <> ) : int32 -> int32 -> bool = "%notequal"
+
+  external ( = ) : int32 -> int32 -> bool = "%equal"
+
+  external ( > ) : int32 -> int32 -> bool = "%greaterthan"
+
+  external ( >= ) : int32 -> int32 -> bool = "%greaterequal"
+
+  external compare : int32 -> int32 -> int = "%compare"
+
+  external equal : int32 -> int32 -> bool = "%equal"
+
+  let warn_overflow ~to_dec ~to_hex i i32 =
+    warn
+      "Warning: integer overflow: integer 0x%s (%s) truncated to 0x%lx (%ld); the \
+       generated code might be incorrect.@."
+      (to_hex i)
+      (to_dec i)
+      i32
+      i32
+
+  let convert_warning_on_overflow ~to_int32 ~of_int32 ~equal ~to_dec ~to_hex x =
+    let i32 = to_int32 x in
+    let x' = of_int32 i32 in
+    if not (equal x' x) then warn_overflow ~to_dec ~to_hex x i32;
+    i32
+
+  let of_int_warning_on_overflow i =
+    convert_warning_on_overflow
+      ~to_int32:Int32.of_int
+      ~of_int32:Int32.to_int
+      ~equal:Int_replace_polymorphic_compare.( = )
+      ~to_dec:(Printf.sprintf "%d")
+      ~to_hex:(Printf.sprintf "%x")
+      i
+
+  let of_nativeint_warning_on_overflow n =
+    convert_warning_on_overflow
+      ~to_int32:Nativeint.to_int32
+      ~of_int32:Nativeint.of_int32
+      ~equal:Nativeint.equal
+      ~to_dec:(Printf.sprintf "%nd")
+      ~to_hex:(Printf.sprintf "%nx")
+      n
 end
 
 module Option = struct
@@ -173,12 +302,23 @@ module Option = struct
   let is_some = function
     | None -> false
     | Some _ -> true
+
+  let value ~default = function
+    | None -> default
+    | Some s -> s
+end
+
+module Int64 = struct
+  include Int64
+
+  let equal (a : int64) (b : int64) = Poly.( = ) a b
 end
 
 module Float = struct
   type t = float
 
-  let equal (a : float) (b : float) = Poly.compare a b = 0
+  let equal (a : float) (b : float) =
+    Int64.equal (Int64.bits_of_float a) (Int64.bits_of_float b)
 
   (* Re-defined here to stay compatible with OCaml 4.02 *)
   external classify_float : float -> fpclass = "caml_classify_float"
@@ -209,6 +349,22 @@ end
 module Char = struct
   include Char
 
+  external ( < ) : char -> char -> bool = "%lessthan"
+
+  external ( <= ) : char -> char -> bool = "%lessequal"
+
+  external ( <> ) : char -> char -> bool = "%notequal"
+
+  external ( = ) : char -> char -> bool = "%equal"
+
+  external ( > ) : char -> char -> bool = "%greaterthan"
+
+  external ( >= ) : char -> char -> bool = "%greaterequal"
+
+  external compare : char -> char -> int = "%compare"
+
+  external equal : char -> char -> bool = "%equal"
+
   let is_alpha = function
     | 'a' .. 'z' | 'A' .. 'Z' -> true
     | _ -> false
@@ -235,17 +391,11 @@ module Bytes = struct
 end
 
 module String = struct
-  let equal (a : string) (b : string) = a = b [@@ocaml.warning "-32"]
-
   include StringLabels
 
-
-  let rec list_car ch = match ch with
-    | "" -> []
-    | ch -> (String.get ch 0 ) :: (list_car (String.sub ch 1 ( (String.length ch)-1) ) )  ;;
-
-
   let equal (a : string) (b : string) = Poly.(a = b)
+
+  let hash (a : string) = Hashtbl.hash a
 
   let is_empty = function
     | "" -> true
@@ -266,6 +416,18 @@ module String = struct
         else loop (i + 1)
       in
       loop 0
+
+  let drop_prefix ~prefix s =
+    let plen = String.length prefix in
+    if plen > String.length s
+    then None
+    else
+      try
+        for i = 0 to String.length prefix - 1 do
+          if not (Char.equal s.[i] prefix.[i]) then raise Exit
+        done;
+        Some (String.sub s plen (String.length s - plen))
+      with Exit -> None
 
   let for_all =
     let rec loop s ~f ~last i =
@@ -289,7 +451,7 @@ module String = struct
   let has_backslash s =
     let res = ref false in
     for i = 0 to String.length s - 1 do
-      if s.[i] = '\\' then res := true
+      if Char.equal s.[i] '\\' then res := true
     done;
     !res
 
@@ -297,8 +459,8 @@ module String = struct
     let len = String.length p in
     let rec split beg cur =
       if cur >= len
-      then if cur - beg > 0 then [String.sub p beg (cur - beg)] else []
-      else if p.[cur] = sep
+      then if cur - beg > 0 then [ String.sub p beg (cur - beg) ] else []
+      else if Char.equal p.[cur] sep
       then String.sub p beg (cur - beg) :: split (cur + 1) (cur + 1)
       else split beg (cur + 1)
     in
@@ -316,7 +478,7 @@ module String = struct
       else
         let s_max = String.length s - 1 in
         if s_max < 0
-        then [""]
+        then [ "" ]
         else
           let acc = ref [] in
           let sub_start = ref 0 in
@@ -333,14 +495,15 @@ module String = struct
              that no separator can be found we exit the loop and make a
              substring from [sub_start] until the end of the string. *)
           while !i + sep_max <= s_max do
-            if String.unsafe_get s !i <> String.unsafe_get sep 0
+            if not (Char.equal (String.unsafe_get s !i) (String.unsafe_get sep 0))
             then incr i
             else (
               (* Check remaining [sep] chars match, access to unsafe s (!i + !k) is
                    guaranteed by loop invariant. *)
               k := 1;
               while
-                !k <= sep_max && String.unsafe_get s (!i + !k) = String.unsafe_get sep !k
+                !k <= sep_max
+                && Char.equal (String.unsafe_get s (!i + !k)) (String.unsafe_get sep !k)
               do
                 incr k
               done;
@@ -367,8 +530,7 @@ module String = struct
   let lsplit2 line ~on:delim =
     try
       let pos = index line delim in
-      Some
-        (sub line ~pos:0 ~len:pos, sub line ~pos:(pos + 1) ~len:(length line - pos - 1))
+      Some (sub line ~pos:0 ~len:pos, sub line ~pos:(pos + 1) ~len:(length line - pos - 1))
     with Not_found -> None
 
   let capitalize_ascii s = apply1 Char.uppercase_ascii s
@@ -379,7 +541,7 @@ module String = struct
   let is_prefixed_i prefix str i =
     let len = String.length prefix in
     let j = ref 0 in
-    while !j < len && String.unsafe_get prefix !j = String.unsafe_get str (i + !j) do
+    while !j < len && Char.code (String.unsafe_get prefix !j) = Char.code (String.unsafe_get str (i + !j)) do
       incr j
     done;
     !j = len
@@ -428,6 +590,10 @@ module Int = struct
   type t = int
 
   let compare (x : int) y = compare x y
+
+  let equal (x : t) y = x = y
+
+  let hash (x : t) = Hashtbl.hash x
 end
 
 module IntSet = Set.Make (Int)
@@ -456,13 +622,14 @@ module BitSet : sig
 
   val next_mem : t -> int -> int
 end = struct
-  type t = {mutable arr : int array}
+  type t = { mutable arr : int array }
 
-  let create () = {arr = Array.make 1 0}
+  let create () = { arr = Array.make 1 0 }
 
   let size t = Array.length t.arr * int_num_bits
 
-  let mem {arr} i =
+  let mem t i =
+    let arr = t.arr in
     let idx = i / int_num_bits in
     let off = i mod int_num_bits in
     idx < Array.length arr && Array.unsafe_get arr idx land (1 lsl off) <> 0
@@ -521,6 +688,46 @@ module Array = struct
       r := f i (Array.unsafe_get a i) !r
     done;
     !r
+
+  let equal eq a b =
+    let len_a = Array.length a in
+    if len_a <> Array.length b
+    then false
+    else
+      let i = ref 0 in
+      while !i < len_a && eq a.(!i) b.(!i) do
+        incr i
+      done;
+      !i = len_a
+end
+
+module Filename = struct
+  include Filename
+
+  let temp_file_name =
+    (* Inlined unavailable Filename.temp_file_name. Filename.temp_file gives
+       us incorrect permissions. https://github.com/ocsigen/js_of_ocaml/issues/182 *)
+    let prng = lazy (Random.State.make_self_init ()) in
+    fun ~temp_dir prefix suffix ->
+      let rnd = Random.State.bits (Lazy.force prng) land 0xFFFFFF in
+      Filename.concat temp_dir (Printf.sprintf "%s%06x%s" prefix rnd suffix)
+
+  let gen_file file f =
+    let f_tmp =
+      temp_file_name ~temp_dir:(Filename.dirname file) (Filename.basename file) ".tmp"
+    in
+    try
+      let ch = open_out_bin f_tmp in
+      (try f ch
+       with e ->
+         close_out ch;
+         raise e);
+      close_out ch;
+      (try Sys.remove file with Sys_error _ -> ());
+      Sys.rename f_tmp file
+    with exc ->
+      Sys.remove f_tmp;
+      raise exc
 end
 
 type ('left, 'right) either =
