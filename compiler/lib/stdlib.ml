@@ -541,7 +541,7 @@ module String = struct
   let is_prefixed_i prefix str i =
     let len = String.length prefix in
     let j = ref 0 in
-    while !j < len && String.unsafe_get prefix !j = String.unsafe_get str (i + !j) do
+    while !j < len && Char.code (String.unsafe_get prefix !j) = Char.code (String.unsafe_get str (i + !j)) do
       incr j
     done;
     !j = len

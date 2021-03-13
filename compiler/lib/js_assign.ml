@@ -369,6 +369,10 @@ let program' (module Strategy : Strategy) p =
         let name = names.(Var.idx v) in
         assert (not (String.is_empty name));
         Id.ident ~var:v name
+    | x -> x
+  in
+  (new Rehp_traverse.subst color)#program p
+
 let program p =
   if Config.Flag.shortvar ()
   then program' (module Min) p

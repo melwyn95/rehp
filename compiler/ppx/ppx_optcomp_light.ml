@@ -193,6 +193,43 @@ let rec filter_pattern = function
       | None, None -> None
       | Some p1, None -> Some p1
       | None, Some p2 -> Some p2
+      | Some p1, Some p2 -> Some { p with ppat_desc = Ppat_or (p1, p2) })
+  | { ppat_attributes; ppat_loc; _ } as p ->
+      if keep ppat_loc ppat_attributes then Some p else None
+
+(* TODO: This class is useful while we transition to ppxlib.0.17 that provides the `cases`
+   method. Remove this once we drop support for ppxlib < 0.17 *)
+class map =
+  object (self)
+    inherit Ppxlib.Ast_traverse.map as super
+
+    method cases = self#list self#case [@@ocaml.warning "-7"]
+
+    method expression_desc : expression_desc -> expression_desc =
+      fun x ->
+        match x with
+        | Pexp_function a ->
+            let a = self#cases a in
+            Pexp_function a
+        | Pexp_match (a, b) ->
+            let a = self#expression a in
+            let b = self#cases b in
+            Pexp_match (a, b)
+        | Pexp_try (a, b) ->
+            let a = self#expression a in
+            let b = self#cases b in
+            Pexp_try (a, b)
+        | _ -> super#expression_desc x
+    [@@ocaml.warning "-7"]
+  end
+
+let traverse =
+  object
+    inherit map as super
+
+    method! structure items =
+      let items =
+        List.filter items ~f:(fun item ->
             match item.pstr_desc with
             | Pstr_module { pmb_attributes; pmb_loc; _ } -> keep pmb_loc pmb_attributes
             | Pstr_primitive { pval_attributes; pval_loc; _ } ->

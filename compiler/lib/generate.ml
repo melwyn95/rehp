@@ -968,6 +968,11 @@ let apply_fun_raw ctx f params =
         ( runtime_fun ctx "caml_call_gen"
         , [ f; J.EArr (List.map params ~f:(fun x -> Some x)) ]
         , Loc.N ) )
+
+let generate_apply_fun ctx n =
+  let f' = Var.fresh_n "f" in
+  let f = Id.V f' in
+  let params =
     Array.to_list
       (Array.init n ~f:(fun i ->
            let a = Var.fresh_n (Printf.sprintf "a%d" i) in

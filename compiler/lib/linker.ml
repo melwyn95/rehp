@@ -519,6 +519,3 @@ let all state =
       with Not_found -> acc)
     state.ids
     []
-<<<<<<< HEAD
-
-let link state =

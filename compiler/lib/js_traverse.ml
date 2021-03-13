@@ -839,6 +839,7 @@ let is_one = function
 
 let assign_op = function
   | exp, EBin (Plus, exp', exp'') -> (
+      match exp = exp', exp = exp'' with
       | false, false -> None
       | true, false ->
           if is_one exp''
@@ -862,7 +863,7 @@ let assign_op = function
 class simpl =
   object (m)
     inherit map as super
-
+    method expression e =
       let e = super#expression e in
       let is_zero x =
         match Num.to_string x with
@@ -883,7 +884,7 @@ class simpl =
           | (ENum _ as x), ENum zero when is_zero zero -> x
           | _ -> e)
       | _ -> e
-
+    method statements s =
       let s = super#statement s in
       match s with
       | Block [ x ] -> fst x

@@ -417,11 +417,11 @@ let run
                     ~custom_header
                     pfs_fmt
                     one.debug
-                    code)));
+                    code))));
     if times () then Format.eprintf "compilation: %a@." Timer.print t
   in
   (if runtime_only
-  then
+   then
     let code : Parse_bytecode.one =
       { code = Parse_bytecode.predefined_exceptions ()
       ; cmis = StringSet.empty
@@ -429,15 +429,15 @@ let run
       }
     in
     output "Runtime" [] empty_extra_hash_data code true (fst output_file)
-  else
-    let kind, ic, close_ic =
-      match input_file with
-      | None -> Parse_bytecode.from_channel stdin, stdin, fun () -> ()
-      | Some fn ->
-          let ch = open_in_bin fn in
-          let res = Parse_bytecode.from_channel ch in
-          res, ch, fun () -> close_in ch
-    in
+    else
+      let kind, ic, close_ic =
+        match input_file with
+        | None -> Parse_bytecode.from_channel stdin, stdin, fun () -> ()
+        | Some fn ->
+            let ch = open_in_bin fn in
+            let res = Parse_bytecode.from_channel ch in
+            res, ch, fun () -> close_in ch
+      in
     (match kind with
     | `Exe ->
         let t1 = Timer.make () in
@@ -548,7 +548,7 @@ let run
             Dependency_outputs.removeUnexpectedFiles
               (Fp.append x "rehp-output-dir.txt" :: expected)
               observed
-        | _ -> ())
+        | _ -> ()
     | `Cma cma ->
         let t1 = Timer.make () in
         let code =
