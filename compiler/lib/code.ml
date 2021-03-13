@@ -139,7 +139,8 @@ end = struct
 
   include T
 
-  let printer = VarPrinter.create VarPrinter.Alphabet.php
+  (* let printer = VarPrinter.create VarPrinter.Alphabet.php *)
+  let printer = Var_printer.create Var_printer.Alphabet.javascript
 
   let locations = Hashtbl.create 17
 
@@ -148,9 +149,9 @@ end = struct
   let reset () =
     last_var := 0;
     Hashtbl.clear locations;
-    VarPrinter.reset printer
+    Var_printer.reset printer
 
-  let to_string ?origin i = VarPrinter.to_string printer ?origin i
+  let to_string ?origin i = Var_printer.to_string printer ?origin i
 
   let orig_string_name_debug i = VarPrinter.orig_string_name_debug printer i
 
@@ -158,7 +159,7 @@ end = struct
 
   (* Format.fprintf f "%s" (to_string x) *)
 
-  let name i nm = VarPrinter.name printer i nm
+  let name i nm = Var_printer.name printer i nm
 
   let loc i pi = Hashtbl.add locations i pi
 
@@ -183,17 +184,17 @@ end = struct
 
   let of_idx v = v
 
-  let get_name i = VarPrinter.get_name printer i
+  let get_name i = Var_printer.get_name printer i
 
   let propagate_name i j =
-    VarPrinter.propagate_name printer i j;
+    Var_printer.propagate_name printer i j;
     match get_loc i with
     | None -> ()
     | Some l -> loc j l
 
-  let set_pretty b = VarPrinter.set_pretty printer b
+  let set_pretty b = Var_printer.set_pretty printer b
 
-  let set_stable b = VarPrinter.set_stable printer b
+  let set_stable b = Var_printer.set_stable printer b
 
   let fork o =
     let n = fresh () in
@@ -270,6 +271,43 @@ type constant =
   | Tuple of int * constant array * array_or_not
   | Int of int32
   | Null
+
+let rec constant_equal a b =
+  match a, b with
+  | String a, String b -> Some (String.equal a b)
+  | IString a, IString b -> Some (String.equal a b)
+  | Tuple (ta, a, _), Tuple (tb, b, _) ->
+      if ta <> tb || Array.length a <> Array.length b
+      then Some false
+      else
+        let same = ref (Some true) in
+        for i = 0 to Array.length a - 1 do
+          match !same, constant_equal a.(i) b.(i) with
+          | None, _ -> ()
+          | _, None -> same := None
+          | Some s, Some c -> same := Some (s && c)
+        done;
+        !same
+  | Int64 a, Int64 b -> Some (Int64.equal a b)
+  | Float_array a, Float_array b -> Some (Array.equal Float.equal a b)
+  | Int a, Int b -> Some (Int32.equal a b)
+  | Float a, Float b -> Some (Float.equal a b)
+  | String _, IString _ | IString _, String _ -> None
+  | Int _, Float _ | Float _, Int _ -> None
+  | Tuple ((0 | 254), _, _), Float_array _ -> None
+  | Float_array _, Tuple ((0 | 254), _, _) -> None
+  | Tuple _, (String _ | IString _ | Int64 _ | Int _ | Float _ | Float_array _) ->
+      Some false
+  | Float_array _, (String _ | IString _ | Int64 _ | Int _ | Float _ | Tuple _) ->
+      Some false
+  | String _, (Int64 _ | Int _ | Float _ | Tuple _ | Float_array _) -> Some false
+  | IString _, (Int64 _ | Int _ | Float _ | Tuple _ | Float_array _) -> Some false
+  | Int64 _, (String _ | IString _ | Int _ | Float _ | Tuple _ | Float_array _) ->
+      Some false
+  | Float _, (String _ | IString _ | Float_array _ | Int64 _ | Tuple (_, _, _)) ->
+      Some false
+  | Int _, (String _ | IString _ | Float_array _ | Int64 _ | Tuple (_, _, _)) ->
+      Some false
 
 type prim_arg =
   | Pv of Var.t

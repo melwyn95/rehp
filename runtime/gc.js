@@ -28,3 +28,25 @@ function caml_gc_set(_control) {
 function caml_gc_get(){
   return [0,0,0,0,0,0,0,0,0]
 }
+
+//Provides: caml_memprof_set
+function caml_memprof_set(_control) {
+  return 0;
+}
+
+//Provides: caml_final_register const
+function caml_final_register () { return 0; }
+//Provides: caml_final_register_called_without_value const
+function caml_final_register_called_without_value () { return 0; }
+//Provides: caml_final_release const
+function caml_final_release () { return 0; }
+
+//Provides: caml_memprof_start
+function caml_memprof_start(rate,stack_size,tracker){
+  return 0;
+}
+
+//Provides: caml_memprof_stop
+function caml_memprof_stop(unit) {
+  return 0;
+}

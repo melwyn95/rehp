@@ -18,10 +18,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
-
-(* TODO: I think that the expanded bindings themselves need to get passed to
- * specialize *)
-open Stdlib
+open! Stdlib
 open Code
 open Flow
 
@@ -358,15 +355,14 @@ let specialize_instr addr info i rem =
          let a =
            Array.map a ~f:(fun x ->
                match the_def_of info (Pv x) with
-               | Some (Block (_, [|k; v|], _)) ->
+               | Some (Block (_, [| k; v |], _)) ->
                    let k =
                      match the_string_of info (Pv k) with
                      | Some s -> Pc (String s)
                      | _ -> raise Exit
                    in
-                   [k; Pv v]
-               | _ ->
-                raise Exit)
+                   [ k; Pv v ]
+               | _ -> raise Exit)
          in
          Let (x, Prim (Extern "%caml_js_opt_object", List.flatten (Array.to_list a)))
        with Exit -> i)
@@ -400,22 +396,22 @@ let specialize_instr addr info i rem =
       | Some s when String.is_ascii s -> Let (x, Constant (IString s))
       | _ -> i)
       :: rem
-  | Let (x, Prim (Extern "%int_mul", [y; z])) ->
+  | Let (x, Prim (Extern "%int_mul", [ y; z ])) ->
       (match the_int info y, the_int info z with
-      | Some j, _ when Int32.abs j < 0x200000l ->
-          Let (x, Prim (Extern "%direct_int_mul", [y; z]))
-      | _, Some j when Int32.abs j < 0x200000l ->
-          Let (x, Prim (Extern "%direct_int_mul", [y; z]))
+      | Some j, _ when Int32.(abs j < 0x200000l) ->
+          Let (x, Prim (Extern "%direct_int_mul", [ y; z ]))
+      | _, Some j when Int32.(abs j < 0x200000l) ->
+          Let (x, Prim (Extern "%direct_int_mul", [ y; z ]))
       | _ -> i)
       :: rem
-  | Let (x, Prim (Extern "%int_div", [y; z])) ->
+  | Let (x, Prim (Extern "%int_div", [ y; z ])) ->
       (match the_int info z with
-      | Some j when j <> 0l -> Let (x, Prim (Extern "%direct_int_div", [y; z]))
+      | Some j when Int32.(j <> 0l) -> Let (x, Prim (Extern "%direct_int_div", [ y; z ]))
       | _ -> i)
       :: rem
-  | Let (x, Prim (Extern "%int_mod", [y; z])) ->
+  | Let (x, Prim (Extern "%int_mod", [ y; z ])) ->
       (match the_int info z with
-      | Some j when j <> 0l -> Let (x, Prim (Extern "%direct_int_mod", [y; z]))
+      | Some j when Int32.(j <> 0l) -> Let (x, Prim (Extern "%direct_int_mod", [ y; z ]))
       | _ -> i)
       :: rem
   | _ -> i :: rem
@@ -424,52 +420,53 @@ let rec specialize_instrs addr info checks l =
   match l with
   | [] -> []
   | i :: r -> (
-    (* We make bound checking explicit. Then, we can remove duplicated
+      (* We make bound checking explicit. Then, we can remove duplicated
          bound checks. Also, it appears to be more efficient to inline
          the array access. The bound checking function returns the array,
          which allows to produce more compact code. *)
-    match i with
-    | Let (x, Prim (Extern "caml_array_get", [y; z]))
-     |Let (x, Prim (Extern "caml_array_get_float", [y; z]))
-     |Let (x, Prim (Extern "caml_array_get_addr", [y; z])) ->
-        let idx =
-          match the_int info z with
-          | Some idx -> `Cst idx
-          | None -> `Var z
-        in
-        if List.mem (y, idx) ~set:checks
-        then
-          Let (x, Prim (Extern "caml_array_unsafe_get", [y; z]))
-          :: specialize_instrs addr info checks r
-        else
-          let y' = Code.Var.fresh () in
-          Let (y', Prim (Extern "caml_check_bound", [y; z]))
-          :: Let (x, Prim (Extern "caml_array_unsafe_get", [Pv y'; z]))
-          :: specialize_instrs addr info ((y, idx) :: checks) r
-    | Let (x, Prim (Extern "caml_array_set", [y; z; t]))
-     |Let (x, Prim (Extern "caml_array_set_float", [y; z; t]))
-     |Let (x, Prim (Extern "caml_array_set_addr", [y; z; t])) ->
-        let idx =
-          match the_int info z with
-          | Some idx -> `Cst idx
-          | None -> `Var z
-        in
-        if List.mem (y, idx) ~set:checks
-        then
-          Let (x, Prim (Extern "caml_array_unsafe_set", [y; z; t]))
-          :: specialize_instrs addr info checks r
-        else
-          let y' = Code.Var.fresh () in
-          Let (y', Prim (Extern "caml_check_bound", [y; z]))
-          :: Let (x, Prim (Extern "caml_array_unsafe_set", [Pv y'; z; t]))
-          :: specialize_instrs addr info ((y, idx) :: checks) r
-    | _ -> specialize_instr addr info i (specialize_instrs addr info checks r))
+      match i with
+      | Let (x, Prim (Extern "caml_array_get", [ y; z ]))
+      | Let (x, Prim (Extern "caml_array_get_float", [ y; z ]))
+      | Let (x, Prim (Extern "caml_array_get_addr", [ y; z ])) ->
+          let idx =
+            match the_int info z with
+            | Some idx -> `Cst idx
+            | None -> `Var z
+          in
+          if List.mem (y, idx) ~set:checks
+          then
+            Let (x, Prim (Extern "caml_array_unsafe_get", [ y; z ]))
+            :: specialize_instrs info checks r
+          else
+            let y' = Code.Var.fresh () in
+            Let (y', Prim (Extern "caml_check_bound", [ y; z ]))
+            ::
+            Let (x, Prim (Extern "caml_array_unsafe_get", [ Pv y'; z ]))
+            :: specialize_instrs info ((y, idx) :: checks) r
+      | Let (x, Prim (Extern "caml_array_set", [ y; z; t ]))
+      | Let (x, Prim (Extern "caml_array_set_float", [ y; z; t ]))
+      | Let (x, Prim (Extern "caml_array_set_addr", [ y; z; t ])) ->
+          let idx =
+            match the_int info z with
+            | Some idx -> `Cst idx
+            | None -> `Var z
+          in
+          if List.mem (y, idx) ~set:checks
+          then
+            Let (x, Prim (Extern "caml_array_unsafe_set", [ y; z; t ]))
+            :: specialize_instrs info checks r
+          else
+            let y' = Code.Var.fresh () in
+            Let (y', Prim (Extern "caml_check_bound", [ y; z ]))
+            ::
+            Let (x, Prim (Extern "caml_array_unsafe_set", [ Pv y'; z; t ]))
+            :: specialize_instrs info ((y, idx) :: checks) r
+      | _ -> specialize_instr info i (specialize_instrs info checks r))
 
 let specialize_all_instrs info p =
   let blocks =
-    Addr.Map.mapi
-      (fun addr block ->
-        {block with Code.body = specialize_instrs addr info [] block.body})
+    Addr.Map.map
+      (fun block -> { block with Code.body = specialize_instrs info [] block.body })
       p.blocks
   in
   { p with blocks }

@@ -177,7 +177,8 @@ let named_colors =
     ; "white", (255, 255, 255)
     ; "whitesmoke", (245, 245, 245)
     ; "yellow", (255, 255, 0)
-    ; "yellowgreen", (154, 205, 50) ];
+    ; "yellowgreen", (154, 205, 50)
+    ];
   colors
 
 let rgb_of_hsv h s v =
@@ -208,12 +209,13 @@ let parse_color c =
     let c = conv (String.sub c 1 2), conv (String.sub c 3 2), conv (String.sub c 5 2) in
     Some (convert c)
   else
-    try Scanf.sscanf c "%f,%f,%f" (fun h s v -> Some (rgb_of_hsv h s v)) with
-    | Scanf.Scan_failure _ | Failure _ | End_of_file | Invalid_argument _ ->
-        Some
-          ( try Hashtbl.find named_colors c with Not_found ->
-              Format.eprintf "%s@." c;
-              assert false )
+    try Scanf.sscanf c "%f,%f,%f" (fun h s v -> Some (rgb_of_hsv h s v))
+    with Scanf.Scan_failure _ | Failure _ | End_of_file | Invalid_argument _ ->
+      Some
+        (try Hashtbl.find named_colors c
+         with Not_found ->
+           Format.eprintf "%s@." c;
+           assert false)
 
 let convert (r, g, b) =
   let c i = float i /. 255.99 in
@@ -369,7 +371,8 @@ let named_colors =
     ; "white", (255, 255, 255)
     ; "whitesmoke", (245, 245, 245)
     ; "yellow", (255, 255, 0)
-    ; "yellowgreen", (154, 205, 50) ];
+    ; "yellowgreen", (154, 205, 50)
+    ];
   colors
 
 (****)
@@ -384,19 +387,25 @@ let parse_float s = try float_of_string s with Failure _ -> raise Not_found
 
 let parse_rectangle s =
   match Str.split comma_re s with
-  | [x1; y1; x2; y2] ->
+  | [ x1; y1; x2; y2 ] ->
       parse_float x1, -.parse_float y2, parse_float x2, -.parse_float y1
   | _ -> raise Not_found
 
 let parse_point s =
   match Str.split comma_re s with
-  | [x; y] -> parse_float x, -.parse_float y
+  | [ x; y ] -> parse_float x, -.parse_float y
   | _ -> raise Not_found
 
-let start_point l = match l with x :: _ -> x | _ -> raise Not_found
+let start_point l =
+  match l with
+  | x :: _ -> x
+  | _ -> raise Not_found
 
 let rec end_point l =
-  match l with [x] -> x | _ :: r -> end_point r | _ -> raise Not_found
+  match l with
+  | [ x ] -> x
+  | _ :: r -> end_point r
+  | _ -> raise Not_found
 
 let epsilon = 0.0001
 
@@ -411,7 +420,7 @@ let add_arrow scene (px, py) (ux, uy) color arrow_size (*XXX pen_width*) =
   let vy = dx *. arrow_width in
   let qx = px +. dx in
   let qy = py +. dy in
-  let l = [|px, py; px -. vx, py -. vy; qx, qy; px +. vx, py +. vy|] in
+  let l = [| px, py; px -. vx, py -. vy; qx, qy; px +. vx, py +. vy |] in
   Scene.add scene (Scene.Polygon (l, color, color))
 
 let rec render_spline_rec l =
@@ -433,29 +442,29 @@ let parse_spline scene s color arrow_size =
       let l = List.map (fun s -> Str.split comma_re s) (Str.split wsp_re s) in
       let endp, l =
         match l with
-        | ["e"; x; y] :: r -> Some (parse_float x, -.parse_float y), r
+        | [ "e"; x; y ] :: r -> Some (parse_float x, -.parse_float y), r
         | _ -> None, l
       in
       let startp, l =
         match l with
-        | ["s"; x; y] :: r -> Some (parse_float x, -.parse_float y), r
+        | [ "s"; x; y ] :: r -> Some (parse_float x, -.parse_float y), r
         | _ -> None, l
       in
       let l =
         List.map
           (fun l ->
             match l with
-            | [x; y] -> parse_float x, -.parse_float y
-            | _ -> raise Not_found )
+            | [ x; y ] -> parse_float x, -.parse_float y
+            | _ -> raise Not_found)
           l
       in
-      ( match endp with
+      (match endp with
       | Some u -> add_arrow scene (end_point l) u color arrow_size
-      | None -> () );
-      ( match startp with
+      | None -> ());
+      (match startp with
       | Some u -> add_arrow scene (start_point l) u color arrow_size
-      | None -> () );
-      Scene.add scene (Scene.Path (render_spline l, None, color)) )
+      | None -> ());
+      Scene.add scene (Scene.Path (render_spline l, None, color)))
     l
 
 let add_rect_margin (x1, y1, x2, y2) w = x1 -. w, y1 -. w, x2 +. w, y2 +. w
@@ -486,10 +495,10 @@ let f g =
         if style <> "filled"
         then None
         else
-          try parse_color (StringMap.find "fillcolor" n.G.node_attr) with Not_found ->
-            color
+          try parse_color (StringMap.find "fillcolor" n.G.node_attr)
+          with Not_found -> color
       in
-      ( match shape with
+      (match shape with
       | "box" | "rect" | "rectangle" ->
           let w2 = width /. 2. in
           let h2 = height /. 2. in
@@ -499,7 +508,7 @@ let f g =
       | _ ->
           Scene.add
             scene
-            (Scene.Ellipse (x, y, width /. 2., height /. 2., fillcolor, color)) );
+            (Scene.Ellipse (x, y, width /. 2., height /. 2., fillcolor, color)));
       let font_color =
         parse_color (try StringMap.find "color" n.G.node_attr with Not_found -> "black")
       in
@@ -515,7 +524,7 @@ let f g =
         scene
         (Scene.Text
            (x, y +. (height *. 0.1), label, (font_family, font_size), font_color, None));
-      () )
+      ())
     g.G.nodes.G.seq;
   IntMap.iter
     (fun _ e ->
@@ -527,6 +536,6 @@ let f g =
         try parse_float (StringMap.find "arrowsize" e.G.edge_attr) with Not_found -> 1.
       in
       parse_spline scene (StringMap.find "pos" e.G.edge_attr) color arrow_size;
-      () )
+      ())
     g.G.edges.G.seq;
   bbox, scene

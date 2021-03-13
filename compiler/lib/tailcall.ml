@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
-open Stdlib
+open! Stdlib
 
 let times = Debug.find "times"
 
@@ -40,7 +40,6 @@ let rec tail_call x f l =
   | _ :: rem -> tail_call x f rem
 
 let rewrite_block (f, f_params, f_pc, args) pc blocks =
-  (*Format.eprintf "%d@." pc;*)
   let block = Addr.Map.find pc blocks in
   match block.branch with
   | Return x -> (
@@ -58,8 +57,6 @@ let rewrite_block (f, f_params, f_pc, args) pc blocks =
             blocks
       | _ -> blocks)
   | _ -> blocks
-
-let ( >> ) x f = f x
 
 (* Skip try body *)
 let fold_children blocks pc f accu =

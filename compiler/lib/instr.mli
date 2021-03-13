@@ -64,13 +64,13 @@ type t =
   | GRAB
   | CLOSURE
   | CLOSUREREC
-  | OFFSETCLOSUREM2
+  | OFFSETCLOSUREM3
   | OFFSETCLOSURE0
-  | OFFSETCLOSURE2
+  | OFFSETCLOSURE3
   | OFFSETCLOSURE
-  | PUSHOFFSETCLOSUREM2
+  | PUSHOFFSETCLOSUREM3
   | PUSHOFFSETCLOSURE0
-  | PUSHOFFSETCLOSURE2
+  | PUSHOFFSETCLOSURE3
   | PUSHOFFSETCLOSURE
   | GETGLOBAL
   | PUSHGETGLOBAL
@@ -190,7 +190,8 @@ type desc =
   { code : t
   ; kind : kind
   ; name : string
-  ; opcode : int }
+  ; opcode : int
+  }
 
 val get_instr_exn : string -> int -> desc
 

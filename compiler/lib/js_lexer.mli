@@ -17,8 +17,6 @@
  * license.txt for more details.
  *)
 
-val initial :
-  (Lexing.lexbuf -> Parse_info.t) ->
-  Js_token.token option -> Lexing.lexbuf -> Js_token.token
+val main : Lexing.lexbuf -> Js_token.t
 
-val pos : Lexing.lexbuf -> string * int
+val main_regexp : Lexing.lexbuf -> Js_token.t

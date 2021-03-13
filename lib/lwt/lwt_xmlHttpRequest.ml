@@ -21,6 +21,7 @@
 open Js_of_ocaml
 open Js
 open XmlHttpRequest
+open! Import
 
 let encode_url l =
   String.concat
@@ -33,13 +34,14 @@ let encode_url l =
 
 (* Higher level interface: *)
 
-(** type of the http headers *)
 type 'response generic_http_frame =
   { url : string
   ; code : int
   ; headers : string -> string option
   ; content : 'response
-  ; content_xml : unit -> Dom.element Dom.document t option }
+  ; content_xml : unit -> Dom.element Dom.document t option
+  }
+(** type of the http headers *)
 
 type http_frame = string generic_http_frame
 
@@ -48,49 +50,54 @@ exception Wrong_headers of (int * (string -> string option))
 let default_response url code headers req =
   { url
   ; code
-  ; content = Js.to_string req##.responseText
+  ; content = Js.Opt.case req##.responseText (fun () -> "") (fun x -> Js.to_string x)
   ; content_xml =
       (fun () ->
         match Js.Opt.to_option req##.responseXML with
         | None -> None
-        | Some doc -> if Js.some doc##.documentElement == Js.null then None else Some doc
-        )
-  ; headers }
+        | Some doc -> if Js.some doc##.documentElement == Js.null then None else Some doc)
+  ; headers
+  }
 
 let text_response url code headers req =
   { url
   ; code
-  ; content = req##.responseText
+  ; content = Js.Opt.case req##.responseText (fun () -> Js.string "") (fun x -> x)
   ; content_xml = (fun () -> assert false)
-  ; headers }
+  ; headers
+  }
 
 let document_response url code headers req =
   { url
   ; code
   ; content = File.CoerceTo.document req##.response
   ; content_xml = (fun () -> assert false)
-  ; headers }
+  ; headers
+  }
 
 let json_response url code headers req =
   { url
   ; code
   ; content = File.CoerceTo.json req##.response
   ; content_xml = (fun () -> assert false)
-  ; headers }
+  ; headers
+  }
 
 let blob_response url code headers req =
   { url
   ; code
   ; content = File.CoerceTo.blob req##.response
   ; content_xml = (fun () -> assert false)
-  ; headers }
+  ; headers
+  }
 
 let arraybuffer_response url code headers req =
   { url
   ; code
   ; content = File.CoerceTo.arrayBuffer req##.response
   ; content_xml = (fun () -> assert false)
-  ; headers }
+  ; headers
+  }
 
 let has_get_args url =
   try
@@ -115,7 +122,12 @@ let perform_raw
   let contents_normalization = function
     | `POST_form args ->
         let only_strings =
-          List.for_all (fun x -> match x with _, `String _ -> true | _ -> false) args
+          List.for_all
+            (fun x ->
+              match x with
+              | _, `String _ -> true
+              | _ -> false)
+            args
         in
         let form_contents =
           if only_strings then `Fields (ref []) else Form.empty_form_contents ()
@@ -126,7 +138,9 @@ let perform_raw
     | `Blob b -> `Blob (b : #File.blob Js.t :> File.blob Js.t)
   in
   let contents =
-    match contents with None -> None | Some c -> Some (contents_normalization c)
+    match contents with
+    | None -> None
+    | Some c -> Some (contents_normalization c)
   in
   let method_to_string m =
     match m with
@@ -140,46 +154,50 @@ let perform_raw
   in
   let method_, content_type =
     let override_method m =
-      match override_method with None -> m | Some v -> method_to_string v
+      match override_method with
+      | None -> m
+      | Some v -> method_to_string v
     in
     let override_content_type c =
-      match content_type with None -> Some c | Some _ -> content_type
+      match content_type with
+      | None -> Some c
+      | Some _ -> content_type
     in
     match contents with
     | None -> override_method "GET", content_type
     | Some (`Form_contents form) -> (
-      match form with
-      | `Fields _strings ->
-          ( override_method "POST"
-          , override_content_type "application/x-www-form-urlencoded" )
-      | `FormData _ -> override_method "POST", content_type )
+        match form with
+        | `Fields _strings ->
+            ( override_method "POST"
+            , override_content_type "application/x-www-form-urlencoded" )
+        | `FormData _ -> override_method "POST", content_type)
     | Some (`String _ | `Blob _) -> override_method "POST", content_type
   in
   let url =
-    if get_args = []
+    if Poly.(get_args = [])
     then url
     else url ^ (if has_get_args url then "&" else "?") ^ Url.encode_arguments get_args
   in
   let (res : resptype generic_http_frame Lwt.t), w = Lwt.task () in
   let req = create () in
   req##_open (Js.string method_) (Js.string url) Js._true;
-  ( match override_mime_type with
+  (match override_mime_type with
   | None -> ()
-  | Some mime_type -> req##overrideMimeType (Js.string mime_type) );
-  ( match response_type with
+  | Some mime_type -> req##overrideMimeType (Js.string mime_type));
+  (match response_type with
   | ArrayBuffer -> req##.responseType := Js.string "arraybuffer"
   | Blob -> req##.responseType := Js.string "blob"
   | Document -> req##.responseType := Js.string "document"
   | JSON -> req##.responseType := Js.string "json"
   | Text -> req##.responseType := Js.string "text"
-  | Default -> req##.responseType := Js.string "" );
-  ( match with_credentials with
+  | Default -> req##.responseType := Js.string "");
+  (match with_credentials with
   | Some c -> req##.withCredentials := Js.bool c
-  | None -> () );
-  ( match content_type with
+  | None -> ());
+  (match content_type with
   | Some content_type ->
       req##setRequestHeader (Js.string "Content-type") (Js.string content_type)
-  | _ -> () );
+  | _ -> ());
   List.iter (fun (n, v) -> req##setRequestHeader (Js.string n) (Js.string v)) headers;
   let headers s =
     Opt.case
@@ -190,15 +208,15 @@ let perform_raw
   let do_check_headers =
     let st = ref `Not_yet in
     fun () ->
-      if !st = `Not_yet
+      if Poly.(!st = `Not_yet)
       then
         if check_headers req##.status headers
         then st := `Passed
         else (
           Lwt.wakeup_exn w (Wrong_headers (req##.status, headers));
           st := `Failed;
-          req##abort );
-      !st <> `Failed
+          req##abort);
+      Poly.(!st <> `Failed)
   in
   req##.onreadystatechange :=
     Js.wrap_callback (fun _ ->
@@ -222,28 +240,28 @@ let perform_raw
                 | Default -> default_response url req##.status headers req
               in
               Lwt.wakeup w response
-        | _ -> () );
-  ( match progress with
+        | _ -> ());
+  (match progress with
   | Some progress ->
       req##.onprogress :=
         Dom.handler (fun e ->
             progress e##.loaded e##.total;
-            Js._true )
-  | None -> () );
+            Js._true)
+  | None -> ());
   Optdef.iter req##.upload (fun upload ->
       match upload_progress with
       | Some upload_progress ->
           upload##.onprogress :=
             Dom.handler (fun e ->
                 upload_progress e##.loaded e##.total;
-                Js._true )
-      | None -> () );
-  ( match contents with
+                Js._true)
+      | None -> ());
+  (match contents with
   | None -> req##send Js.null
   | Some (`Form_contents (`Fields l)) -> req##send (Js.some (string (encode_url !l)))
   | Some (`Form_contents (`FormData f)) -> req##send_formData f
   | Some (`String s) -> req##send (Js.some (Js.string s))
-  | Some (`Blob b) -> req##send_blob b );
+  | Some (`Blob b) -> req##send_blob b);
   Lwt.on_cancel res (fun () -> req##abort);
   res
 

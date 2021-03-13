@@ -1,10 +1,12 @@
 set -x
 
 # Install system packages.
-wget https://raw.githubusercontent.com/ocaml/ocaml-travisci-skeleton/master/.travis-ocaml.sh
+wget https://raw.githubusercontent.com/ocaml/ocaml-ci-scripts/master/.travis-ocaml.sh
 bash -ex .travis-ocaml.sh
 
 eval $(opam env)
+opam update
+opam upgrade --yes || opam upgrade --yes --fixup
 
 ACTUAL_COMPILER=`ocamlc -version`
 if [ "$ACTUAL_COMPILER" != "$OCAML_VERSION" ]
@@ -24,24 +26,39 @@ PACKAGES="js_of_ocaml \
 case $MODE in
     opam)
         # Pin Js_of_ocaml, install dependencies, and then install Js_of_ocaml.
-        opam pin add --no-action -y js_of_ocaml.dev .
-        opam pin add --no-action -y js_of_ocaml-compiler.dev .
-        opam pin add --no-action -y js_of_ocaml-ocamlbuild.dev .
-        opam pin add --no-action -y js_of_ocaml-ppx.dev .
-        opam pin add --no-action -y js_of_ocaml-ppx_deriving_json.dev .
-        opam pin add --no-action -y js_of_ocaml-lwt.dev .
-        opam pin add --no-action -y js_of_ocaml-tyxml.dev .
-        opam pin add --no-action -y js_of_ocaml-toplevel.dev .
+        opam pin add --no-action -y js_of_ocaml.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-compiler.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-ocamlbuild.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-ppx.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-ppx_deriving_json.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-lwt.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-tyxml.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-toplevel.dev -k path .
 
-        opam install -y lwt reactiveData tyxml || true
-        opam install -y ppx_tools ppx_deriving || true
-
+        opam install -y lwt reactiveData tyxml graphics || true
+        opam install -y ppxlib || true
 
         opam install -y --best-effort $PACKAGES
+        opam upgrade --yes
         ;;
     build)
-        opam install -y --deps-only $PACKAGES
-        opam install -y cohttp-lwt-unix menhir
+        # Pin Js_of_ocaml, install dependencies.
+        opam pin add --no-action -y js_of_ocaml.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-compiler.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-ocamlbuild.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-ppx.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-ppx_deriving_json.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-lwt.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-tyxml.dev -k path .
+        opam pin add --no-action -y js_of_ocaml-toplevel.dev -k path .
+
+        opam pin add --no-action -y num https://github.com/ocaml/num.git#master
+
+        opam install -y --best-effort --deps-only $PACKAGES || true
+        opam install -y cohttp-lwt-unix menhir ppx_expect yojson sexplib graphics odoc
+        opam upgrade --yes
         dune build @runtest @default @ocsigen-doc -j 8
+        opam install -y ocamlformat.$(cat .ocamlformat | grep version | cut -d '=' -f 2)
+        make fmt
         ;;
 esac

@@ -17,24 +17,24 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
-open Stdlib
+open! Stdlib
+open Javascript
 
 let debug = Debug.find "shortvar"
 
 module S = Code.Var.Set
-
 module Var = Code.Var
 
 module type Strategy = sig
   type t
+
   val create : int -> t
   val record_block : t -> Rehp_traverse.t -> catch:bool -> Id.t list -> unit
   val allocate_variables : t -> count:int Id.IdentMap.t -> string array
 end
 
 module Min : Strategy = struct
-
-(*
+  (*
 We are trying to achieve the following goals:
 (1) variable names should be as short as possible
 (2) one should reuse as much as possible a small subsets of variable
@@ -77,26 +77,19 @@ while compiling the OCaml toplevel:
 *)
 
   type alloc =
-    { mutable first_free : int;
-      mutable used : BitSet.t }
+    { mutable first_free : int
+    ; mutable used : BitSet.t
+    }
 
-  let make_alloc_table () =
-    { first_free = 0;
-      used = BitSet.create () }
+  let make_alloc_table () = { first_free = 0; used = BitSet.create () }
 
-  let next_available a i =
-    BitSet.next_free a.used (max i a.first_free)
+  let next_available a i = BitSet.next_free a.used (max i a.first_free)
 
   let allocate a i =
     BitSet.set a.used i;
-    if a.first_free = i then begin
-      a.first_free <- BitSet.next_free a.used a.first_free
-    end
+    if a.first_free = i then a.first_free <- BitSet.next_free a.used a.first_free
 
-  let is_available l i =
-    List.for_all l ~f:(fun a -> BitSet.mem a.used i)
-
-
+  let is_available l i = List.for_all l ~f:(fun a -> BitSet.mem a.used i)
 
   let first_available l =
     let rec find_rec n l =
@@ -107,15 +100,17 @@ while compiling the OCaml toplevel:
 
   let mark_allocated l i = List.iter l ~f:(fun a -> allocate a i)
 
-  type t = {
-    constr : alloc list array; (* Constraints on variables *)
-    mutable parameters : Var.t list array; (* Function parameters *)
-    mutable constraints : S.t list }     (* For debugging *)
+  type t =
+    { constr : alloc list array
+    ; (* Constraints on variables *)
+      mutable parameters : Var.t list array
+    ; (* Function parameters *)
+      mutable constraints : S.t list
+    }
 
-  let create nv =
-    { constr = Array.make nv [];
-      parameters = [|[]|];
-      constraints = [] }
+  (* For debugging *)
+
+  let create nv = { constr = Array.make nv []; parameters = [| [] |]; constraints = [] }
 
   (* let output_debug_information t count =
    *
@@ -196,44 +191,52 @@ while compiling the OCaml toplevel:
     let n3 = ref 0 in
     let stats i n =
       incr n0;
-      if n < 54 then begin incr n1; n2 := !n2 + (weight i) end;
-      n3 := !n3 + (weight i)
+      if n < 54
+      then (
+        incr n1;
+        n2 := !n2 + weight i);
+      n3 := !n3 + weight i
     in
     let nm ~origin n =
-      name.(origin) <- Var.to_string ~origin:(Var.of_idx origin) (Var.of_idx n) in
+      name.(origin) <- Var.to_string ~origin:(Var.of_idx origin) (Var.of_idx n)
+    in
     let total = ref 0 in
     let bad = ref 0 in
     for i = 0 to Array.length t.parameters - 1 do
-      List.iter (List.rev t.parameters.(i))
+      List.iter
+        (List.rev t.parameters.(i))
         ~f:(fun x ->
-           incr total;
-           let idx = Var.idx x in
-           let l = constr.(idx) in
-           if is_available l i then begin
-             nm ~origin:idx i;
-             mark_allocated l i;
-             stats idx i
-           end else
-             incr bad)
+          incr total;
+          let idx = Var.idx x in
+          let l = constr.(idx) in
+          if is_available l i
+          then (
+            nm ~origin:idx i;
+            mark_allocated l i;
+            stats idx i)
+          else incr bad)
     done;
-    if debug () then
+    if debug ()
+    then
       Format.eprintf
-        "Function parameter properly assigned: %d/%d@." (!total - !bad) !total;
+        "Function parameter properly assigned: %d/%d@."
+        (!total - !bad)
+        !total;
     for i = 0 to len - 1 do
       let l = constr.(idx.(i)) in
-      if l <> [] && String.length name.(idx.(i)) = 0 then begin
+      if (not (List.is_empty l)) && String.length name.(idx.(i)) = 0
+      then (
         let n = first_available l in
         let idx = idx.(i) in
         nm ~origin:idx n;
         mark_allocated l n;
-        stats idx n
-      end;
-      if l = [] then assert (weight (idx.(i)) = 0);
+        stats idx n);
+      if List.is_empty l then assert (weight idx.(i) = 0)
     done;
-    if debug () then begin
+    if debug ()
+    then (
       Format.eprintf "short variable count: %d/%d@." !n1 !n0;
-      Format.eprintf "short variable occurrences: %d/%d@." !n2 !n3
-    end;
+      Format.eprintf "short variable occurrences: %d/%d@." !n2 !n3);
     name
 
   let add_constraints global u ?(offset=0) params =
@@ -266,7 +269,6 @@ while compiling the OCaml toplevel:
     add_constraints state all ~offset params;
 end
 
-
 module Preserve : Strategy = struct
   (* Try to preserve variable names.
      - Assign the origin name if present: "{original_name}"
@@ -289,47 +291,52 @@ module Preserve : Strategy = struct
       | true, _   -> assert false
       | false, _  -> scope.Rehp_traverse.def
     in
-    t.scopes <- (defs,scope) :: t.scopes
+    t.scopes <- (defs, scope) :: t.scopes
+
   let allocate_variables t ~count:_ =
     let names = Array.make t.size "" in
     List.iter t.scopes ~f:(fun (defs, state) ->
-      let assigned =
-        List.fold_left ~f:StringSet.union ~init:StringSet.empty
-          [
-            state.Rehp_traverse.def_name;
-            state.Rehp_traverse.use_name;
-            (Backend.Current.keyword ())
-          ]
-      in
-      let assigned = S.fold (fun var acc  ->
-        let name = names.(Var.idx var) in
-        if name <> ""
-        then StringSet.add name acc
-        else acc
-      ) (S.union state.Rehp_traverse.use state.Rehp_traverse.def) assigned  in
-      let _assigned = S.fold (fun var assigned ->
-        assert (names.(Var.idx var) = "");
-        let name =
-          match Var.get_name var with
-          | Some expected_name ->
-            assert(expected_name <> "");
-            if not (StringSet.mem expected_name assigned)
-            then expected_name
-            else
-              let i = ref 0 in
-              while StringSet.mem (Printf.sprintf "%s__%d" expected_name !i) assigned do
-                incr i
-              done;
-              Printf.sprintf "%s__%d" expected_name !i
-          | None -> Var.to_string var
+        let assigned =
+          List.fold_left
+            ~f:StringSet.union
+            ~init:StringSet.empty
+            [ state.Js_traverse.def_name; state.Js_traverse.use_name; Reserved.keyword ]
         in
-        names.(Var.idx var) <- name;
-        StringSet.add name assigned
-      ) defs assigned in
-      ()
-    );
+        let assigned =
+          S.fold
+            (fun var acc ->
+              let name = names.(Var.idx var) in
+              if not (String.is_empty name) then StringSet.add name acc else acc)
+            (S.union state.Js_traverse.use state.Js_traverse.def)
+            assigned
+        in
+        let _assigned =
+          S.fold
+            (fun var assigned ->
+              assert (String.is_empty names.(Var.idx var));
+              let name =
+                match Var.get_name var with
+                | Some expected_name ->
+                    assert (not (String.is_empty expected_name));
+                    if not (StringSet.mem expected_name assigned)
+                    then expected_name
+                    else
+                      let i = ref 0 in
+                      while
+                        StringSet.mem (Printf.sprintf "%s$%d" expected_name !i) assigned
+                      do
+                        incr i
+                      done;
+                      Printf.sprintf "%s$%d" expected_name !i
+                | None -> Var.to_string var
+              in
+              names.(Var.idx var) <- name;
+              StringSet.add name assigned)
+            defs
+            assigned
+        in
+        ());
     names
-
 end
 
 class traverse record_block = object(m)
@@ -347,7 +354,12 @@ let program' (module Strategy : Strategy) p =
   mapper#block [];
   if S.cardinal (mapper#get_free) <> 0
   then begin
-    failwith_ "Some variables escaped (#%d)" (S.cardinal (mapper#get_free))
+    (*Note: this is from JSOO *)
+    if true
+    then failwith_ "Some variables escaped (#%d)" (S.cardinal mapper#get_free)
+    else (
+      Format.eprintf "Some variables escaped (#%d)" (S.cardinal mapper#get_free);
+      S.iter (fun s -> Format.eprintf "%s@." (Var.to_string s)) mapper#get_free);
     (* S.iter(fun s -> (Format.eprintf "%s@." (Var.to_string s))) coloring#get_free *)
   end;
   let names = Strategy.allocate_variables state ~count:mapper#state.Rehp_traverse.count in
@@ -357,11 +369,6 @@ let program' (module Strategy : Strategy) p =
         let name = names.(Var.idx v) in
         assert (not (String.is_empty name));
         Id.ident ~var:v name
-    | x -> x
-  in
-  (new Rehp_traverse.subst color)#program p
-
-
 let program p =
   if Config.Flag.shortvar ()
   then program' (module Min) p

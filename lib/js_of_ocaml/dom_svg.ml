@@ -19,6 +19,7 @@
  *)
 
 open Js
+open! Import
 
 let xmlns = Js.string "http://www.w3.org/2000/svg"
 
@@ -2023,7 +2024,7 @@ let createFontFaceSrc doc : fontElement t = unsafeCreateElement doc "font-face-s
 let createFontFaceUri doc : fontElement t = unsafeCreateElement doc "font-face-uri"
 
 let createForeignObject doc : foreignObjectElement t =
-  unsafeCreateElement doc "foreignobject"
+  unsafeCreateElement doc "foreignObject"
 
 let createG doc : gElement t = unsafeCreateElement doc "g"
 

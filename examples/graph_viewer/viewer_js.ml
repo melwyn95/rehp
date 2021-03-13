@@ -24,7 +24,8 @@ type rect =
   { x : int
   ; y : int
   ; width : int
-  ; height : int }
+  ; height : int
+  }
 
 module Html = Dom_html
 
@@ -82,11 +83,11 @@ module Common = Viewer_common.F (struct
     ctx##.font := font;
     ctx##.textAlign := Js.string "center";
     ctx##.textBaseline := Js.string "middle";
-    ( match fill_color with
+    (match fill_color with
     | Some c ->
         ctx##.fillStyle := c;
         ctx##fillText txt x y
-    | None -> () );
+    | None -> ());
     match stroke_color with
     | Some c ->
         ctx##.strokeStyle := c;
@@ -115,7 +116,14 @@ module Common = Viewer_common.F (struct
   let get_context (_p, c) = c
 
   let put_pixmap
-      ~dst:((_p, c) : drawable) ~x ~y ~xsrc ~ysrc ~width ~height ((p, _) : pixmap) =
+      ~dst:((_p, c) : drawable)
+      ~x
+      ~y
+      ~xsrc
+      ~ysrc
+      ~width
+      ~height
+      ((p, _) : pixmap) =
     c##drawImage_fullFromCanvas
       p
       (float xsrc)
@@ -133,7 +141,8 @@ module Common = Viewer_common.F (struct
     { x : int
     ; y : int
     ; width : int
-    ; height : int }
+    ; height : int
+    }
 
   let compute_extents _ = assert false
 end)
@@ -144,7 +153,7 @@ let redraw st s h v (canvas : Html.canvasElement Js.t) =
   let width = canvas##.width in
   let height = canvas##.height in
   (*Firebug.console##time (Js.string "draw");*)
-  redraw st s h v canvas {x = 0; y = 0; width; height} 0 0 width height
+  redraw st s h v canvas { x = 0; y = 0; width; height } 0 0 width height
 
 (*
 ;Firebug.console##timeEnd (Js.string "draw")
@@ -156,13 +165,19 @@ let ( >>= ) = Lwt.bind
 
 let http_get url =
   XmlHttpRequest.get url
-  >>= fun {XmlHttpRequest.code = cod; content = msg; _} ->
+  >>= fun { XmlHttpRequest.code = cod; content = msg; _ } ->
   if cod = 0 || cod = 200 then Lwt.return msg else fst (Lwt.wait ())
 
 let getfile f = try Lwt.return (Sys_js.read_file ~name:f) with Not_found -> http_get f
 
-class adjustment ?(value = 0.) ?(lower = 0.) ?(upper = 100.) ?(step_incr = 1.)
-  ?(page_incr = 10.) ?(page_size = 10.) () =
+class adjustment
+  ?(value = 0.)
+  ?(lower = 0.)
+  ?(upper = 100.)
+  ?(step_incr = 1.)
+  ?(page_incr = 10.)
+  ?(page_size = 10.)
+  () =
   object
     val mutable _value = value
 
@@ -191,11 +206,21 @@ class adjustment ?(value = 0.) ?(lower = 0.) ?(upper = 100.) ?(step_incr = 1.)
     method set_value v = _value <- v
 
     method set_bounds ?lower ?upper ?step_incr ?page_incr ?page_size () =
-      (match lower with Some v -> _lower <- v | None -> ());
-      (match upper with Some v -> _upper <- v | None -> ());
-      (match step_incr with Some v -> _step_incr <- v | None -> ());
-      (match page_incr with Some v -> _page_incr <- v | None -> ());
-      match page_size with Some v -> _page_size <- v | None -> ()
+      (match lower with
+      | Some v -> _lower <- v
+      | None -> ());
+      (match upper with
+      | Some v -> _upper <- v
+      | None -> ());
+      (match step_incr with
+      | Some v -> _step_incr <- v
+      | None -> ());
+      (match page_incr with
+      | Some v -> _page_incr <- v
+      | None -> ());
+      match page_size with
+      | Some v -> _page_size <- v
+      | None -> ()
   end
 
 let handle_drag element f =
@@ -216,7 +241,7 @@ let handle_drag element f =
                  mx := x;
                  my := y;
                  f (x - x') (y - y');
-                 Js._true ))
+                 Js._true))
             Js._true
         in
         let c2 = ref Js.null in
@@ -229,12 +254,12 @@ let handle_drag element f =
                     Html.removeEventListener c1;
                     Js.Opt.iter !c2 Html.removeEventListener;
                     element##.style##.cursor := Js.string "";
-                    Js._true ))
+                    Js._true))
                Js._true);
         (* We do not want to disable the default action on mouse down
-          (here, keyboard focus)
-          in this example. *)
-        Js._true )
+           (here, keyboard focus)
+           in this example. *)
+        Js._true)
 
 let start () =
   let doc = Html.document in
@@ -248,10 +273,10 @@ let start () =
   p##.style##.display := Js.string "none";
   Dom.appendChild doc##.body p;
   ignore
-    ( Lwt_js.sleep 0.5
+    (Lwt_js.sleep 0.5
     >>= fun () ->
     if not !started then p##.style##.display := Js.string "inline";
-    Lwt.return () );
+    Lwt.return ());
   (*
   Firebug.console##time(Js.string "loading");
 *)
@@ -276,11 +301,14 @@ let start () =
     ; st_y = y1
     ; st_width = x2 -. x1
     ; st_height = y2 -. y1
-    ; st_pixmap = Common.make_pixmap () }
+    ; st_pixmap = Common.make_pixmap ()
+    }
   in
   let canvas = create_canvas page##.clientWidth page##.clientHeight in
   Dom.appendChild doc##.body canvas;
-  let allocation () = {x = 0; y = 0; width = canvas##.width; height = canvas##.height} in
+  let allocation () =
+    { x = 0; y = 0; width = canvas##.width; height = canvas##.height }
+  in
   let hadj = new adjustment () in
   let vadj = new adjustment () in
   let sadj = new adjustment ~upper:20. ~step_incr:1. ~page_incr:0. ~page_size:0. () in
@@ -326,7 +354,7 @@ Firebug.console##log_2(Js.string "update", Js.date##now());
       Html._requestAnimationFrame
         (Js.wrap_callback (fun () ->
              redraw_queued := false;
-             redraw st (get_scale ()) hadj#value vadj#value canvas )) )
+             redraw st (get_scale ()) hadj#value vadj#value canvas)))
     (*
     if force then redraw st (get_scale ()) hadj#value vadj#value canvas else
     if not !redraw_queued then
@@ -341,9 +369,7 @@ Firebug.console##log(Js.string "sleep");
 *)
   in
   let a = allocation () in
-  let zoom_factor =
-    max (st.st_width /. float a.width) (st.st_height /. float a.height)
-  in
+  let zoom_factor = max (st.st_width /. float a.width) (st.st_height /. float a.height) in
   set_zoom_factor zoom_factor;
   let prev_scale = ref (get_scale ()) in
   let rescale x y =
@@ -386,7 +412,7 @@ Firebug.console##log(Js.string "sleep");
       thumb##.style##.top := points pos';
       pos := pos';
       sadj#set_value (float (height - pos') *. sadj#upper /. float height);
-      rescale 0.5 0.5 )
+      rescale 0.5 0.5)
   in
   handle_drag thumb (fun _dx dy -> set_slider_position (min height (max 0 (!pos + dy))));
   slider##.onmousedown :=
@@ -394,7 +420,7 @@ Firebug.console##log(Js.string "sleep");
         let ey = ev##.clientY in
         let _, sy = Dom_html.elementClientPosition slider in
         set_slider_position (max 0 (min height (ey - sy - (size / 2))));
-        Js._false );
+        Js._false);
   let adjust_slider () =
     let pos' = height - truncate ((sadj#value *. float height /. sadj#upper) +. 0.5) in
     thumb##.style##.top := points pos';
@@ -406,14 +432,16 @@ Firebug.console##log(Js.string "sleep");
         canvas##.width := page##.clientWidth;
         canvas##.height := page##.clientHeight;
         update_view true;
-        Js._true );
+        Js._true);
   (* Drag the graph using the mouse *)
   handle_drag canvas (fun dx dy ->
       let scale = get_scale () in
       let offset a d =
         a#set_value (min (a#value -. (float d /. scale)) (a#upper -. a#page_size))
       in
-      offset hadj dx; offset vadj dy; update_view true );
+      offset hadj dx;
+      offset vadj dy;
+      update_view true);
   let bump_scale x y v =
     let a = allocation () in
     let x = x /. float a.width in
@@ -424,7 +452,7 @@ Firebug.console##log(Js.string "sleep");
     then (
       sadj#set_value vl;
       adjust_slider ();
-      if x >= 0. && x <= 1. && y >= 0. && y <= 1. then rescale x y else rescale 0.5 0.5 );
+      if x >= 0. && x <= 1. && y >= 0. && y <= 1. then rescale x y else rescale 0.5 0.5);
     Js._false
   in
   (* Zoom using the mouse wheel *)
@@ -439,7 +467,7 @@ Firebug.console##log(Js.string "sleep");
          then bump_scale x y 1.
          else if dy > 0
          then bump_scale x y (-1.)
-         else Js._false )
+         else Js._false)
        Js._true);
   (*
   Html.addEventListener Html.document Html.Event.keydown
@@ -499,12 +527,12 @@ Firebug.console##log(Js.string "sleep");
   Html.document##.onkeydown :=
     Html.handler (fun e ->
         ignored_keycode := e##.keyCode;
-        handle_key_event e );
+        handle_key_event e);
   Html.document##.onkeypress :=
     Html.handler (fun e ->
         let k = !ignored_keycode in
         ignored_keycode := -1;
-        if e##.keyCode = k then Js._true else handle_key_event e );
+        if e##.keyCode = k then Js._true else handle_key_event e);
   (*
 Firebug.console##time(Js.string "initial drawing");
 *)
@@ -519,4 +547,4 @@ let _ =
   Html.window##.onload :=
     Html.handler (fun _ ->
         ignore (start ());
-        Js._false )
+        Js._false)

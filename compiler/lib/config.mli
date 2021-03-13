@@ -16,7 +16,6 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
-
 module Flag : sig
   val available : unit -> string list
 
@@ -61,6 +60,8 @@ module Flag : sig
   val inline_callgen : unit -> bool
 
   val safe_string : unit -> bool
+
+  val use_js_string : unit -> bool
 
   val check_magic : unit -> bool
 

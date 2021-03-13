@@ -134,8 +134,7 @@ let propagate1 deps defs st x =
   | Phi s -> var_set_lift (fun y -> Var.Tbl.get st y) s
   | Expr e -> (
       match e with
-      | Constant _ | Apply _ | Prim _ | Closure _ | Block _ ->
-          Var.Set.singleton x
+      | Constant _ | Apply _ | Prim _ | Closure _ | Block _ -> Var.Set.singleton x
       | Field (y, n) ->
           var_set_lift
             (fun z ->
@@ -331,7 +330,7 @@ let the_const_of info x =
         None
         (fun u v ->
           match u, v with
-          | Some i, Some j when Poly.(i = j) -> u
+          | Some i, Some j when Poly.(Code.constant_equal i j = Some true) -> u
           | _ -> None)
         x
   | Pc c -> Some c

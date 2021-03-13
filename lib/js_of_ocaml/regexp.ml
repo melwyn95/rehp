@@ -17,6 +17,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
+open! Import
 
 type regexp = Js.regExp Js.t
 
@@ -43,7 +44,7 @@ let search r s i =
        (r##exec (Js.bytestring s))
        (fun res_pre ->
          let res = Js.match_result res_pre in
-         res##.index, res ))
+         res##.index, res))
 
 let search_forward = search
 

@@ -12,7 +12,9 @@ let fannkuch n =
   let maxflips = ref 0 in
   let sum = ref 0 in
   for i = 0 to n - 1 do
-    p.(i) <- i; q.(i) <- i; s.(i) <- i
+    p.(i) <- i;
+    q.(i) <- i;
+    s.(i) <- i
   done;
   while true do
     let q0 = ref p.(0) in
@@ -28,12 +30,12 @@ let fannkuch n =
         then (
           sum := !sum + (!sign * !flips);
           if !flips > !maxflips then maxflips := !flips;
-          false )
+          false)
         else true
       do
         let qq = q.(!q0) in
         q.(!q0) <- !q0;
-        ( if !q0 >= 3
+        (if !q0 >= 3
         then
           let i = ref 1 in
           let j = ref (!q0 - 1) in
@@ -46,16 +48,16 @@ let fannkuch n =
             !i < !j
           do
             ()
-          done );
+          done);
         q0 := qq;
         incr flips
-      done );
+      done);
     if !sign = 1
     then (
       let t = p.(1) in
       p.(1) <- p.(0);
       p.(0) <- t;
-      sign := -1 )
+      sign := -1)
     else
       let t = p.(1) in
       p.(1) <- p.(2);
@@ -67,11 +69,11 @@ let fannkuch n =
           if sx <> 0
           then (
             s.(i) <- sx - 1;
-            raise Exit );
+            raise Exit);
           if i = n - 1
           then (
             if false then Format.eprintf "%d %d@." !sum !maxflips;
-            exit 0 );
+            exit 0);
           s.(i) <- i;
           let t = p.(0) in
           for j = 0 to i do

@@ -70,7 +70,10 @@ let button_type = Js.string "button"
 let button txt action =
   let b = Dom_html.createInput ~_type:button_type doc in
   b##.value := Js.string txt;
-  b##.onclick := Dom_html.handler (fun _ -> action (); Js._true);
+  b##.onclick :=
+    Dom_html.handler (fun _ ->
+        action ();
+        Js._true);
   b
 
 let toggle_button txt1 txt2 action =
@@ -84,7 +87,7 @@ let toggle_button txt1 txt2 action =
         state := not !state;
         b##.value := if !state then txt2 else txt1;
         action !state;
-        Js._true );
+        Js._true);
   b
 
 let checkbox txt checked action =
@@ -93,7 +96,7 @@ let checkbox txt checked action =
   b##.onclick :=
     Dom_html.handler (fun _ ->
         action (Js.to_bool b##.checked);
-        Js._true );
+        Js._true);
   let lab = Dom_html.createLabel doc in
   Dom.appendChild lab b;
   Dom.appendChild lab (doc##createTextNode (Js.string txt));
@@ -102,7 +105,10 @@ let checkbox txt checked action =
 let radio txt name checked action =
   let b = Dom_html.createInput ~name:(Js.string name) ~_type:(Js.string "radio") doc in
   b##.checked := Js.bool checked;
-  b##.onclick := Dom_html.handler (fun _ -> action (); Js._true);
+  b##.onclick :=
+    Dom_html.handler (fun _ ->
+        action ();
+        Js._true);
   let lab = Dom_html.createLabel doc in
   Dom.appendChild lab b;
   Dom.appendChild lab (doc##createTextNode (Js.string txt));
@@ -113,70 +119,78 @@ let radio txt name checked action =
 type vertex =
   { x : float
   ; y : float
-  ; z : float }
+  ; z : float
+  }
 
-let vertex x y z = {x; y; z}
+let vertex x y z = { x; y; z }
 
 type matrix =
   { r1 : vertex
   ; r2 : vertex
-  ; r3 : vertex }
+  ; r3 : vertex
+  }
 
-let vect {x = x1; y = y1; z = z1} {x = x2; y = y2; z = z2} =
-  {x = x2 -. x1; y = y2 -. y1; z = z2 -. z1}
+let vect { x = x1; y = y1; z = z1 } { x = x2; y = y2; z = z2 } =
+  { x = x2 -. x1; y = y2 -. y1; z = z2 -. z1 }
 
-let cross_product {x = x1; y = y1; z = z1} {x = x2; y = y2; z = z2} =
+let cross_product { x = x1; y = y1; z = z1 } { x = x2; y = y2; z = z2 } =
   { x = (y1 *. z2) -. (y2 *. z1)
   ; y = (z1 *. x2) -. (z2 *. x1)
-  ; z = (x1 *. y2) -. (x2 *. y1) }
+  ; z = (x1 *. y2) -. (x2 *. y1)
+  }
 
-let dot_product {x = x1; y = y1; z = z1} {x = x2; y = y2; z = z2} =
+let dot_product { x = x1; y = y1; z = z1 } { x = x2; y = y2; z = z2 } =
   (x1 *. x2) +. (y1 *. y2) +. (z1 *. z2)
 
-let matrix_vect_mul m {x; y; z} =
-  let {r1; r2; r3} = m in
+let matrix_vect_mul m { x; y; z } =
+  let { r1; r2; r3 } = m in
   let x' = (x *. r1.x) +. (y *. r1.y) +. (z *. r1.z) in
   let y' = (x *. r2.x) +. (y *. r2.y) +. (z *. r2.z) in
   let z' = (x *. r3.x) +. (y *. r3.y) +. (z *. r3.z) in
-  {x = x'; y = y'; z = z'}
+  { x = x'; y = y'; z = z' }
 
 let matrix_transp m =
-  let {r1; r2; r3} = m in
-  { r1 = {x = r1.x; y = r2.x; z = r3.x}
-  ; r2 = {x = r1.y; y = r2.y; z = r3.y}
-  ; r3 = {x = r1.z; y = r2.z; z = r3.z} }
+  let { r1; r2; r3 } = m in
+  { r1 = { x = r1.x; y = r2.x; z = r3.x }
+  ; r2 = { x = r1.y; y = r2.y; z = r3.y }
+  ; r3 = { x = r1.z; y = r2.z; z = r3.z }
+  }
 
 let matrix_mul m m' =
   let m' = matrix_transp m' in
   { r1 = matrix_vect_mul m' m.r1
   ; r2 = matrix_vect_mul m' m.r2
-  ; r3 = matrix_vect_mul m' m.r3 }
+  ; r3 = matrix_vect_mul m' m.r3
+  }
 
 let normalize v =
-  let {x; y; z} = v in
+  let { x; y; z } = v in
   let r = sqrt ((x *. x) +. (y *. y) +. (z *. z)) in
-  {x = x /. r; y = y /. r; z = z /. r}
+  { x = x /. r; y = y /. r; z = z /. r }
 
 let xz_rotation phi =
   let cos_phi = cos phi in
   let sin_phi = sin phi in
   { r1 = vertex cos_phi 0. sin_phi
   ; r2 = vertex 0. 1. 0.
-  ; r3 = vertex (-.sin_phi) 0. cos_phi }
+  ; r3 = vertex (-.sin_phi) 0. cos_phi
+  }
 
 let xy_rotation phi =
   let cos_phi = cos phi in
   let sin_phi = sin phi in
   { r1 = vertex cos_phi sin_phi 0.
   ; r2 = vertex (-.sin_phi) cos_phi 0.
-  ; r3 = vertex 0. 0. 1. }
+  ; r3 = vertex 0. 0. 1.
+  }
 
 let yz_rotation phi =
   let cos_phi = cos phi in
   let sin_phi = sin phi in
   { r1 = vertex 1. 0. 0.
   ; r2 = vertex 0. cos_phi sin_phi
-  ; r3 = vertex 0. (-.sin_phi) cos_phi }
+  ; r3 = vertex 0. (-.sin_phi) cos_phi
+  }
 
 let matrix_identity = xz_rotation 0.
 
@@ -188,16 +202,18 @@ let rotate_normal m v = matrix_vect_mul (matrix_transp m) v
 type face =
   { v1 : int
   ; v2 : int
-  ; v3 : int }
+  ; v3 : int
+  }
 
-let face v1 v2 v3 = {v1; v2; v3}
+let face v1 v2 v3 = { v1; v2; v3 }
 
 type t =
   { vertices : vertex array
-  ; faces : face array }
+  ; faces : face array
+  }
 
 let rotate_object m o =
-  {o with vertices = Array.map (fun v -> matrix_vect_mul m v) o.vertices}
+  { o with vertices = Array.map (fun v -> matrix_vect_mul m v) o.vertices }
 
 let octahedron =
   { vertices =
@@ -206,7 +222,8 @@ let octahedron =
        ; vertex 0. 1. 0.
        ; vertex (-1.) 0. 0.
        ; vertex 0. (-1.) 0.
-       ; vertex 0. 0. (-1.) |]
+       ; vertex 0. 0. (-1.)
+      |]
   ; faces =
       [| face 0 1 2
        ; face 0 2 3
@@ -215,7 +232,9 @@ let octahedron =
        ; face 1 5 2
        ; face 1 4 5
        ; face 3 5 4
-       ; face 3 2 5 |] }
+       ; face 3 2 5
+      |]
+  }
 
 (****)
 
@@ -243,13 +262,13 @@ let tesselate_sphere p_div t_div =
       if j = 0
       then (
         faces.(2 * k) <- face north k ((k + t_div) mod n);
-        faces.((2 * k) + 1) <- face south ((k + (2 * t_div) - 1) mod n) (k + t_div - 1) )
+        faces.((2 * k) + 1) <- face south ((k + (2 * t_div) - 1) mod n) (k + t_div - 1))
       else (
         faces.(2 * k) <- face k ((k + t_div) mod n) (k - 1);
-        faces.((2 * k) + 1) <- face (k - 1) ((k + t_div) mod n) ((k + t_div - 1) mod n) )
+        faces.((2 * k) + 1) <- face (k - 1) ((k + t_div) mod n) ((k + t_div - 1) mod n))
     done
   done;
-  {vertices; faces}
+  { vertices; faces }
 
 (****)
 
@@ -267,11 +286,12 @@ let divide all o =
   let midpoints = Hashtbl.create 17 in
   let midpoint v1 v2 =
     let p = if v1 < v2 then v1, v2 else v2, v1 in
-    try Hashtbl.find midpoints p with Not_found ->
+    try Hashtbl.find midpoints p
+    with Not_found ->
       let v1 = o.vertices.(v1) in
       let v2 = o.vertices.(v2) in
       let v =
-        {x = (v1.x +. v2.x) /. 2.; y = (v1.y +. v2.y) /. 2.; z = (v1.z +. v2.z) /. 2.}
+        { x = (v1.x +. v2.x) /. 2.; y = (v1.y +. v2.y) /. 2.; z = (v1.z +. v2.z) /. 2. }
       in
       let v =
         if all || abs_float v1.y = 1. || abs_float v2.y = 1. then normalize v else v
@@ -285,7 +305,7 @@ let divide all o =
   in
   let k = ref 0 in
   for i = 0 to Array.length o.faces - 1 do
-    let {v1; v2; v3} = o.faces.(i) in
+    let { v1; v2; v3 } = o.faces.(i) in
     if all
        || abs_float o.vertices.(v1).y = 1.
        || abs_float o.vertices.(v2).y = 1.
@@ -294,18 +314,18 @@ let divide all o =
       let w1 = midpoint v1 v2 in
       let w2 = midpoint v2 v3 in
       let w3 = midpoint v3 v1 in
-      faces.(!k) <- {v1; v2 = w1; v3 = w3};
-      faces.(!k + 1) <- {v1 = w1; v2; v3 = w2};
-      faces.(!k + 2) <- {v1 = w3; v2 = w2; v3};
-      faces.(!k + 3) <- {v1 = w1; v2 = w2; v3 = w3};
-      k := !k + 4 )
+      faces.(!k) <- { v1; v2 = w1; v3 = w3 };
+      faces.(!k + 1) <- { v1 = w1; v2; v3 = w2 };
+      faces.(!k + 2) <- { v1 = w3; v2 = w2; v3 };
+      faces.(!k + 3) <- { v1 = w1; v2 = w2; v3 = w3 };
+      k := !k + 4)
     else (
       faces.(!k) <- o.faces.(i);
-      incr k )
+      incr k)
   done;
   assert (!j = Array.length vertices);
   assert (!k = Array.length faces);
-  {vertices; faces}
+  { vertices; faces }
 
 (****)
 
@@ -324,15 +344,19 @@ let ( >>= ) = Lwt.bind
 let lwt_wrap f =
   let t, w = Lwt.task () in
   let cont x = Lwt.wakeup w x in
-  f cont; t
+  f cont;
+  t
 
 (****)
 
 let load_image src =
   let img = Html.createImg Html.document in
   lwt_wrap (fun c ->
-      img##.onload := Html.handler (fun _ -> c (); Js._false);
-      img##.src := src )
+      img##.onload :=
+        Html.handler (fun _ ->
+            c ();
+            Js._false);
+      img##.src := src)
   >>= fun () -> Lwt.return img
 
 (****)
@@ -394,11 +418,11 @@ let shadow texture =
         truncate (mod_float (((2. *. pi) -. phi) *. float w /. 2. /. pi) (float w))
       in
       ctx'##drawImage_fromCanvas canvas (float i) 0.;
-      ctx'##drawImage_fromCanvas canvas (float i -. float w) 0. )
+      ctx'##drawImage_fromCanvas canvas (float i -. float w) 0.)
     else if not !no_lighting
     then (
       ctx'##drawImage texture 0. 0.;
-      no_lighting := true )
+      no_lighting := true)
   in
   (*
   Dom.appendChild Html.document##body canvas';
@@ -407,7 +431,7 @@ let shadow texture =
 
 (****)
 
-let to_uv tw th {x; y; z} =
+let to_uv tw th { x; y; z } =
   let cst1 = ((tw /. 2.) -. 0.99) /. pi in
   let cst2 = th /. 2. in
   let cst3 = (th -. 0.99) /. pi in
@@ -424,7 +448,7 @@ let min (u : float) v = if u < v then u else v
 let max (u : float) v = if u < v then v else u
 
 let precompute_mapping_info tw th uv f =
-  let {v1; v2; v3} = f in
+  let { v1; v2; v3 } = f in
   let u1, v1 = uv.(v1) in
   let u2, v2 = uv.(v2) in
   let u3, v3 = uv.(v3) in
@@ -462,10 +486,10 @@ let precompute_mapping_info tw th uv f =
 
 let draw ctx _img shd o _uv normals face_info dir =
   Array.iteri
-    (fun i {v1; v2; v3} ->
-      let {x = x1; y = y1; z = _z1} = o.vertices.(v1) in
-      let {x = x2; y = y2; z = _z2} = o.vertices.(v2) in
-      let {x = x3; y = y3; z = _z3} = o.vertices.(v3) in
+    (fun i { v1; v2; v3 } ->
+      let { x = x1; y = y1; z = _z1 } = o.vertices.(v1) in
+      let { x = x2; y = y2; z = _z2 } = o.vertices.(v2) in
+      let { x = x3; y = y3; z = _z3 } = o.vertices.(v3) in
       if dot_product normals.(i) dir >= 0.
       then (
         ctx##beginPath;
@@ -535,7 +559,7 @@ let du = u' -. u in
 let dv = v' -. v in
 *)
         ctx##drawImage_fullFromCanvas shd u v du dv u v du dv;
-        ctx##restore ) )
+        ctx##restore))
     o.faces
 
 let ( >> ) x f = f x
@@ -549,7 +573,7 @@ let o = tesselate_sphere 12 8
 (*
 let o = octahedron >> divide true >> divide true >> divide true
 *)
-let v = {x = 0.; y = 0.; z = 1.}
+let v = { x = 0.; y = 0.; z = 1. }
 
 let _texture = Js.string "black.jpg"
 
@@ -559,7 +583,7 @@ let texture = Js.string "../planet/texture.jpg"
 
 let start _ =
   Lwt.ignore_result
-    ( load_image texture
+    (load_image texture
     >>= fun texture ->
     let shd, update_shadow, update_texture = shadow texture in
     let canvas = create_canvas width height in
@@ -573,11 +597,11 @@ let start _ =
     let uv = Array.map (fun v -> to_uv tw th v) o.vertices in
     let normals =
       Array.map
-        (fun {v1; v2; v3} ->
+        (fun { v1; v2; v3 } ->
           let v1 = o.vertices.(v1) in
           let v2 = o.vertices.(v2) in
           let v3 = o.vertices.(v3) in
-          cross_product (vect v1 v2) (vect v1 v3) )
+          cross_product (vect v1 v2) (vect v1 v3))
         o.faces
     in
     let face_info = Array.map (fun f -> precompute_mapping_info tw th uv f) o.faces in
@@ -598,37 +622,40 @@ let start _ =
     add ctrl d;
     let form = Html.createDiv doc in
     let br () = Html.createBr doc in
-    ( add form (toggle_button "Pause" "Resume" (fun p -> paused := p));
-      add form (br ());
-      add form (toggle_button "Follow rotation" "Fixed position" (fun f -> follow := f));
-      add form (br ());
-      add
-        form
-        (button "Reset orientation" (fun () ->
-             m := matrix_identity;
-             phi_rot := 0.;
-             m_obliq := xy_rotation (-. !obl) ));
-      add form (br ());
-      let lab = Html.createLabel doc in
-      add lab (doc##createTextNode (Js.string "Date:"));
-      let s = Html.createSelect doc in
-      List.iter
-        (fun txt ->
-          let o = Html.createOption doc in
-          add o (doc##createTextNode (Js.string txt));
-          s##add o Js.null )
-        ["December solstice"; "Equinox"; "June solstice"];
-      s##.onchange :=
-        Html.handler (fun _ ->
-            let o =
-              match s##.selectedIndex with 0 -> obliquity | 1 -> 0. | _ -> -.obliquity
-            in
-            update_shadow o;
-            obl := o;
-            (*m_obliq := xy_rotation (-. o);*)
-            Js._true );
-      add lab s;
-      add form lab );
+    (add form (toggle_button "Pause" "Resume" (fun p -> paused := p));
+     add form (br ());
+     add form (toggle_button "Follow rotation" "Fixed position" (fun f -> follow := f));
+     add form (br ());
+     add
+       form
+       (button "Reset orientation" (fun () ->
+            m := matrix_identity;
+            phi_rot := 0.;
+            m_obliq := xy_rotation (-. !obl)));
+     add form (br ());
+     let lab = Html.createLabel doc in
+     add lab (doc##createTextNode (Js.string "Date:"));
+     let s = Html.createSelect doc in
+     List.iter
+       (fun txt ->
+         let o = Html.createOption doc in
+         add o (doc##createTextNode (Js.string txt));
+         s##add o Js.null)
+       [ "December solstice"; "Equinox"; "June solstice" ];
+     s##.onchange :=
+       Html.handler (fun _ ->
+           let o =
+             match s##.selectedIndex with
+             | 0 -> obliquity
+             | 1 -> 0.
+             | _ -> -.obliquity
+           in
+           update_shadow o;
+           obl := o;
+           (*m_obliq := xy_rotation (-. o);*)
+           Js._true);
+     add lab s;
+     add form lab);
     Dom.appendChild ctrl form;
     let form = Html.createDiv doc in
     add form (checkbox "Lighting" true (fun l -> lighting := l));
@@ -662,7 +689,7 @@ let start _ =
                    then m := matrix_mul (xz_rotation (2. *. float dx /. float width)) !m;
                    mx := x;
                    my := y;
-                   Js._true ))
+                   Js._true))
               Js._true
           in
           let c2 = ref Js.null in
@@ -674,9 +701,9 @@ let start _ =
                  (Dom_html.handler (fun _ ->
                       Html.removeEventListener c1;
                       Js.Opt.iter !c2 Html.removeEventListener;
-                      Js._true ))
+                      Js._true))
                  Js._true);
-          Js._false );
+          Js._false);
     let ti = ref (new%js Js.date_now)##getTime in
     let fps = ref 0. in
     let rec loop t phi =
@@ -691,7 +718,7 @@ let start _ =
       then (
         ctx'##beginPath;
         ctx'##arc r r (r *. 0.95) 0. (-2. *. pi) Js._true;
-        ctx'##clip );
+        ctx'##clip);
       ctx'##setTransform (r -. 2.) 0. 0. (r -. 2.) r r;
       ctx'##.globalCompositeOperation := Js.string "lighter";
       draw ctx' texture shd o' uv normals face_info v';
@@ -717,7 +744,7 @@ if true then Lwt.return () else
       if (not !paused) && !follow then phi_rot := !phi_rot +. angle;
       loop t' (if !paused then phi else phi +. angle)
     in
-    loop (new%js Js.date_now)##getTime 0. );
+    loop (new%js Js.date_now)##getTime 0.);
   Js._false
 
 let _ = Html.window##.onload := Html.handler start

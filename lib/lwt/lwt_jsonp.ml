@@ -18,6 +18,7 @@
  *)
 
 open Js_of_ocaml
+open! Import
 
 let rec random_identifier size =
   let b = Buffer.create size in
@@ -40,12 +41,15 @@ let raw_call name uri error_cb user_cb =
   Js.Unsafe.set Dom_html.window (Js.string name) (fun x ->
       executed := true;
       finalize ();
-      user_cb x );
+      user_cb x);
   script##.src := Js.string uri;
   script##._type := Js.string "text/javascript";
   script##.async := Js._true;
-  ((Js.Unsafe.coerce script)##.onerror := fun x -> finalize (); error_cb x);
-  ( (Js.Unsafe.coerce script)##.onload
+  ((Js.Unsafe.coerce script)##.onerror
+  := fun x ->
+  finalize ();
+  error_cb x);
+  ((Js.Unsafe.coerce script)##.onload
   := fun x ->
   Lwt.async (fun () ->
       Lwt.bind (Lwt_js.sleep 1.) (fun () ->
@@ -56,7 +60,7 @@ let raw_call name uri error_cb user_cb =
               (Js.string "Jsonp: script loaded but callback not executed");
             finalize ();
             error_cb x;
-            Lwt.return_unit ) ) ) );
+            Lwt.return_unit))));
   let init () = ignore (Dom.appendChild Dom_html.document##.body script) in
   init, finalize
 
@@ -73,13 +77,18 @@ let call_custom_url ?timeout ?(prefix = "") make_uri =
     match timeout with
     | None -> t
     | Some delay ->
-        let wait = Lwt.bind (Lwt_js.sleep delay) (fun () -> Lwt.cancel t; t) in
-        Lwt.choose [wait; t]
+        let wait =
+          Lwt.bind (Lwt_js.sleep delay) (fun () ->
+              Lwt.cancel t;
+              t)
+        in
+        Lwt.choose [ wait; t ]
   in
-  init (); new_t
+  init ();
+  new_t
 
 let add_param name value l =
-  let l = List.filter (fun (x, _) -> x <> name) l in
+  let l = List.filter (fun (x, _) -> not (String.equal x name)) l in
   (name, value) :: l
 
 let call ?timeout ?(param = "callback") ?(prefix = "") url =
@@ -92,15 +101,18 @@ let call ?timeout ?(param = "callback") ?(prefix = "") url =
           | Url.Http http ->
               Url.Http
                 { http with
-                  Url.hu_arguments = add_param param cbname http.Url.hu_arguments }
+                  Url.hu_arguments = add_param param cbname http.Url.hu_arguments
+                }
           | Url.Https http ->
               Url.Https
                 { http with
-                  Url.hu_arguments = add_param param cbname http.Url.hu_arguments }
+                  Url.hu_arguments = add_param param cbname http.Url.hu_arguments
+                }
           | Url.File file ->
               Url.File
                 { file with
-                  Url.fu_arguments = add_param param cbname file.Url.fu_arguments }
+                  Url.fu_arguments = add_param param cbname file.Url.fu_arguments
+                }
         in
         Url.string_of_url new_url
   in

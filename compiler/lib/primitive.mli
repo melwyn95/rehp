@@ -18,31 +18,57 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 open Stdlib
+
 val is_pure : string -> bool
+
 val exists : string -> bool
 
-type kind = [ `Pure | `Mutable | `Mutator ]
-type kind_arg = [`Shallow_const | `Object_literal | `Const | `Mutable]
+type kind =
+  [ `Pure
+  | `Mutable
+  | `Mutator
+  ]
+
+type kind_arg =
+  [ `Shallow_const
+  | `Object_literal
+  | `Const
+  | `Mutable
+  ]
+
+type condition =
+  [ `If of Parse_info.t option * string
+  | `Ifnot of Parse_info.t option * string
+  ]
+
 type t =
   [ `Requires of Parse_info.t option * string list
   | `Provides of Parse_info.t option * string * kind * kind_arg list option
   | `Version of Parse_info.t option * ((int -> int -> bool) * string) list
   | `Weakdef of Parse_info.t option
+  | condition
   ]
 
 val kind : string -> kind
+
 val kind_args : string -> kind_arg list option
+
 val register : string -> kind -> kind_arg list option -> int option -> unit
 
-val registered_arity : string -> int
-val has_registered_arity : string -> int -> bool
+val arity : string -> int
+
+val has_arity : string -> int -> bool
 
 val alias : string -> string -> unit
+
 val resolve : string -> string
 
 val add_external : string -> unit
+
 val is_external : string -> bool
+
 val get_external : unit -> StringSet.t
 
 val need_named_value : string -> bool
+
 val register_named_value : string -> unit

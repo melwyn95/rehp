@@ -24,22 +24,23 @@ open Js_of_ocaml
 open Js
 open XmlHttpRequest
 
-(** The type for XHR results. The code field is the http status code of the
-    answer. The headers field is a function associating values to any header
-    name. *)
 type 'response generic_http_frame =
   { url : string
   ; code : int
   ; headers : string -> string option
   ; content : 'response
-  ; content_xml : unit -> Dom.element Dom.document t option }
+  ; content_xml : unit -> Dom.element Dom.document t option
+  }
+(** The type for XHR results. The code field is the http status code of the
+    answer. The headers field is a function associating values to any header
+    name. *)
 
 type http_frame = string generic_http_frame
 
+exception Wrong_headers of (int * (string -> string option))
 (** The exception raise by perform functions when the check_headers
     parameter returned false. The parameter of the exception is a
     function is like the [headers] function of [http_frame] *)
-exception Wrong_headers of (int * (string -> string option))
 
 val perform_raw :
      ?headers:(string * string) list
@@ -49,12 +50,14 @@ val perform_raw :
                      int -> (string -> string option) -> bool)
   -> ?progress:(int -> int -> unit)
   -> ?upload_progress:(int -> int -> unit)
-  -> ?contents:[< `POST_form of (string * Form.form_elt) list
-               | `Form_contents of Form.form_contents
-               | `String of string
-               | `Blob of #File.blob Js.t ]
+  -> ?contents:
+       [< `POST_form of (string * Form.form_elt) list
+       | `Form_contents of Form.form_contents
+       | `String of string
+       | `Blob of #File.blob Js.t
+       ]
   -> ?override_mime_type:string
-  -> ?override_method:[< `GET | `POST | `HEAD | `PUT | `DELETE | `OPTIONS | `PATCH]
+  -> ?override_method:[< `GET | `POST | `HEAD | `PUT | `DELETE | `OPTIONS | `PATCH ]
   -> ?with_credentials:bool
   -> response_type:'a response
   -> string
@@ -72,12 +75,14 @@ val perform_raw_url :
                      int -> (string -> string option) -> bool)
   -> ?progress:(int -> int -> unit)
   -> ?upload_progress:(int -> int -> unit)
-  -> ?contents:[< `POST_form of (string * Form.form_elt) list
-               | `Form_contents of Form.form_contents
-               | `String of string
-               | `Blob of #File.blob Js.t ]
+  -> ?contents:
+       [< `POST_form of (string * Form.form_elt) list
+       | `Form_contents of Form.form_contents
+       | `String of string
+       | `Blob of #File.blob Js.t
+       ]
   -> ?override_mime_type:string
-  -> ?override_method:[< `GET | `POST | `HEAD | `PUT | `DELETE | `OPTIONS | `PATCH]
+  -> ?override_method:[< `GET | `POST | `HEAD | `PUT | `DELETE | `OPTIONS | `PATCH ]
   -> ?with_credentials:bool
   -> string
   -> http_frame Lwt.t
@@ -100,12 +105,14 @@ val perform :
                      int -> (string -> string option) -> bool)
   -> ?progress:(int -> int -> unit)
   -> ?upload_progress:(int -> int -> unit)
-  -> ?contents:[< `POST_form of (string * Form.form_elt) list
-               | `Form_contents of Form.form_contents
-               | `String of string
-               | `Blob of #File.blob Js.t ]
+  -> ?contents:
+       [< `POST_form of (string * Form.form_elt) list
+       | `Form_contents of Form.form_contents
+       | `String of string
+       | `Blob of #File.blob Js.t
+       ]
   -> ?override_mime_type:string
-  -> ?override_method:[< `GET | `POST | `HEAD | `PUT | `DELETE | `OPTIONS | `PATCH]
+  -> ?override_method:[< `GET | `POST | `HEAD | `PUT | `DELETE | `OPTIONS | `PATCH ]
   -> ?with_credentials:bool
   -> Url.url
   -> http_frame Lwt.t

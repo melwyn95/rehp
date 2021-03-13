@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-*)
+ *)
 open Js_of_ocaml
 open Js_of_ocaml_lwt
 module Html = Dom_html
@@ -47,11 +47,11 @@ let onload _ =
     let n =
       if text <> old_text
       then (
-        ( try
-            let rendered = Wiki_syntax.xml_of_wiki text in
-            replace_child preview rendered
-          with _ -> () );
-        20 )
+        (try
+           let rendered = Wiki_syntax.xml_of_wiki text in
+           replace_child preview rendered
+         with _ -> ());
+        20)
       else max 0 (n - 1)
     in
     Lwt_js.sleep (if n = 0 then 0.5 else 0.1) >>= fun () -> dyn_preview text n

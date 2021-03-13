@@ -19,6 +19,7 @@
  *)
 
 open Js
+open! Import
 
 type readyState =
   | UNSENT
@@ -75,7 +76,7 @@ class type xmlHttpRequest =
 
     method response : File.file_any readonly_prop
 
-    method responseText : js_string t readonly_prop
+    method responseText : js_string t opt readonly_prop
 
     method responseXML : Dom.element Dom.document t opt readonly_prop
 
@@ -116,10 +117,4 @@ module Event = struct
   let loadend = Dom.Event.make "loadend"
 end
 
-let create () : xmlHttpRequest Js.t =
-  let xmlHttpRequest = Js.Unsafe.global##._XMLHttpRequest in
-  let activeXObject = Js.Unsafe.global##.activeXObject in
-  try new%js xmlHttpRequest with _ -> (
-    try new%js activeXObject (Js.string "Msxml2.XMLHTTP") with _ -> (
-      try new%js activeXObject (Js.string "Msxml3.XMLHTTP") with _ -> (
-        try new%js activeXObject (Js.string "Microsoft.XMLHTTP") with _ -> assert false ) ) )
+external create : unit -> xmlHttpRequest Js.t = "caml_xmlhttprequest_create"

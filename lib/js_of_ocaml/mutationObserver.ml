@@ -16,6 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
+open! Import
 
 class type mutationObserverInit =
   object
@@ -71,8 +72,7 @@ let mutationObserver = Js.Unsafe.global##._MutationObserver
 let is_supported () = Js.Optdef.test mutationObserver
 
 let mutationObserver :
-    (   (mutationRecord Js.t Js.js_array Js.t -> mutationObserver Js.t -> unit)
-        Js.callback
+    (   (mutationRecord Js.t Js.js_array Js.t -> mutationObserver Js.t -> unit) Js.callback
      -> mutationObserver Js.t)
     Js.constr =
   mutationObserver
@@ -88,7 +88,11 @@ let observe
     ?(character_data_old_value : bool option)
     ?(attribute_filter : Js.js_string Js.t list option)
     () : mutationObserver Js.t =
-  let opt_iter x f = match x with None -> () | Some x -> f x in
+  let opt_iter x f =
+    match x with
+    | None -> ()
+    | Some x -> f x
+  in
   let obs = new%js mutationObserver (Js.wrap_callback f) in
   let cfg = empty_mutation_observer_init () in
   let () = opt_iter child_list (fun v -> cfg##.childList := v) in
@@ -101,7 +105,7 @@ let observe
   in
   let () =
     opt_iter attribute_filter (fun l ->
-        cfg##.attributeFilter := Js.array (Array.of_list l) )
+        cfg##.attributeFilter := Js.array (Array.of_list l))
   in
   let () = obs##observe node cfg in
   obs

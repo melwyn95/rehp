@@ -4,12 +4,40 @@ void bigstring_of_array_buffer () {
   fprintf(stderr, "Unimplemented Javascript primitive bigstring_of_array_buffer!\n");
   exit(1);
 }
+void bigstring_of_typed_array () {
+  fprintf(stderr, "Unimplemented Javascript primitive bigstring_of_typed_array!\n");
+  exit(1);
+}
 void bigstring_to_array_buffer () {
   fprintf(stderr, "Unimplemented Javascript primitive bigstring_to_array_buffer!\n");
   exit(1);
 }
+void bigstring_to_typed_array () {
+  fprintf(stderr, "Unimplemented Javascript primitive bigstring_to_typed_array!\n");
+  exit(1);
+}
+void caml_ba_from_typed_array () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_ba_from_typed_array!\n");
+  exit(1);
+}
+void caml_ba_kind_of_typed_array () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_ba_kind_of_typed_array!\n");
+  exit(1);
+}
+void caml_ba_to_typed_array () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_ba_to_typed_array!\n");
+  exit(1);
+}
 void caml_create_file () {
   fprintf(stderr, "Unimplemented Javascript primitive caml_create_file!\n");
+  exit(1);
+}
+void caml_exn_with_js_backtrace () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_exn_with_js_backtrace!\n");
+  exit(1);
+}
+void caml_int64_create_lo_mi_hi () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_int64_create_lo_mi_hi!\n");
   exit(1);
 }
 void caml_js_call () {
@@ -30,6 +58,10 @@ void caml_js_dict_set () {
 }
 void caml_js_equals () {
   fprintf(stderr, "Unimplemented Javascript primitive caml_js_equals!\n");
+  exit(1);
+}
+void caml_js_error_of_exception () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_js_error_of_exception!\n");
   exit(1);
 }
 void caml_js_eval_string () {
@@ -228,12 +260,20 @@ void caml_jsbytes_of_string () {
   fprintf(stderr, "Unimplemented Javascript primitive caml_jsbytes_of_string!\n");
   exit(1);
 }
-void caml_json () {
-  fprintf(stderr, "Unimplemented Javascript primitive caml_json!\n");
+void caml_jsstring_of_string () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_jsstring_of_string!\n");
   exit(1);
 }
 void caml_list_mount_point () {
   fprintf(stderr, "Unimplemented Javascript primitive caml_list_mount_point!\n");
+  exit(1);
+}
+void caml_list_of_js_array () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_list_of_js_array!\n");
+  exit(1);
+}
+void caml_list_to_js_array () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_list_to_js_array!\n");
   exit(1);
 }
 void caml_ml_set_channel_output () {
@@ -264,8 +304,20 @@ void caml_string_of_array () {
   fprintf(stderr, "Unimplemented Javascript primitive caml_string_of_array!\n");
   exit(1);
 }
+void caml_string_of_jsbytes () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_string_of_jsbytes!\n");
+  exit(1);
+}
+void caml_string_of_jsstring () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_string_of_jsstring!\n");
+  exit(1);
+}
 void caml_unmount () {
   fprintf(stderr, "Unimplemented Javascript primitive caml_unmount!\n");
+  exit(1);
+}
+void caml_xmlhttprequest_create () {
+  fprintf(stderr, "Unimplemented Javascript primitive caml_xmlhttprequest_create!\n");
   exit(1);
 }
 void debugger () {

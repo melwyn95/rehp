@@ -20,6 +20,7 @@
 
 open Js
 open Dom
+open! Import
 
 class type blob =
   object
@@ -35,32 +36,40 @@ class type blob =
 let blob_constr = Unsafe.global##._Blob
 
 type 'a make_blob =
-  ?contentType:string -> ?endings:[`Transparent | `Native] -> 'a -> blob t
+  ?contentType:string -> ?endings:[ `Transparent | `Native ] -> 'a -> blob t
 
 let rec filter_map f = function
   | [] -> []
   | v :: q -> (
-    match f v with None -> filter_map f q | Some v' -> v' :: filter_map f q )
+      match f v with
+      | None -> filter_map f q
+      | Some v' -> v' :: filter_map f q)
 
 let make_blob_options contentType endings =
   let options =
     filter_map
       (fun (name, v) ->
-        match v with None -> None | Some v -> Some (name, Unsafe.inject (string v)) )
+        match v with
+        | None -> None
+        | Some v -> Some (name, Unsafe.inject (string v)))
       [ "type", contentType
       ; ( "endings"
         , match endings with
           | None -> None
           | Some `Transparent -> Some "transparent"
-          | Some `Native -> Some "native" ) ]
+          | Some `Native -> Some "native" )
+      ]
   in
-  match options with [] -> undefined | l -> Unsafe.obj (Array.of_list l)
+  match options with
+  | [] -> undefined
+  | l -> Unsafe.obj (Array.of_list l)
 
 let blob_raw ?contentType ?endings a =
   let options = make_blob_options contentType endings in
   new%js blob_constr (array a) options
 
-let blob_from_string ?contentType ?endings s = blob_raw ?contentType ?endings [|string s|]
+let blob_from_string ?contentType ?endings s =
+  blob_raw ?contentType ?endings [| string s |]
 
 let blob_from_any ?contentType ?endings l =
   let l =
@@ -96,9 +105,9 @@ let filename file =
   let file : file_name_only t = Js.Unsafe.coerce file in
   match Optdef.to_option file##.name with
   | None -> (
-    match Optdef.to_option file##.fileName with
-    | None -> failwith "can't retrieve file name: not implemented"
-    | Some name -> name )
+      match Optdef.to_option file##.fileName with
+      | None -> failwith "can't retrieve file name: not implemented"
+      | Some name -> name)
   | Some name -> name
 
 type file_any = < > t
@@ -117,7 +126,7 @@ module CoerceTo = struct
     if instanceof e blob_constr then Js.some (Unsafe.coerce e : #blob t) else Js.null
 
   let string (e : file_any) =
-    if typeof e = string "string"
+    if typeof e == string "string"
     then Js.some (Unsafe.coerce e : js_string t)
     else Js.null
 
