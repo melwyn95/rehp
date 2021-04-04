@@ -16,35 +16,50 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-*)
+ *)
 
 open Stdlib
+
 type fragment =
-  { provides : (Parse_info.t option * string * Primitive.kind * Primitive.kind_arg list option) option
+  { provides :
+      (Parse_info.t option * string * Primitive.kind * Primitive.kind_arg list option)
+      option
   ; requires : string list
   ; version_constraint : ((int -> int -> bool) * string) list list
   ; weakdef : bool
   ; code : Javascript.program
+  ; ignore : [ `No | `Because of Primitive.condition ]
   }
 
 val parse_file : string -> fragment list
 
+val parse_string : string -> fragment list
+
+val parse_builtin : Builtins.File.t -> fragment list
+
 val load_files : string list -> unit
+
+val load_fragment : filename:string -> fragment -> unit
 
 type state
 
 type always_required =
-  { filename : string;
-    program : Javascript.program }
+  { filename : string
+  ; program : Javascript.program
+  }
 
-type output = {
-  runtime_code: Javascript.program;
-  always_required_codes: always_required list;
-}
+type output =
+  { runtime_code : Javascript.program
+  ; always_required_codes : always_required list
+  }
 
 val init : unit -> state
+
 val resolve_deps : ?linkall:bool -> state -> StringSet.t -> state * StringSet.t
-val link : state -> output
+
+val link : Javascript.program -> state -> output
+
 val get_provided : unit -> StringSet.t
+
 val all : state -> string list
 

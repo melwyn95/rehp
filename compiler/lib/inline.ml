@@ -37,13 +37,12 @@ let optimizable blocks pc _ =
             List.for_all b.body ~f:(function
                 | Let (_, Prim (Extern "caml_js_eval_string", _)) -> false
                 | Let (_, Prim (Extern "debugger", _)) -> false
-                | Let (_, Prim (Extern "caml_js_raw_expr", _)) -> false
                 | Let
                     ( _
                     , Prim
                         (Extern ("caml_js_var" | "caml_js_expr" | "caml_pure_js_expr"), _)
                     ) ->
-                    (* TODO: we should smarter here and look the generated js *)
+                    (* TODO: we should be smarter here and look the generated js *)
                     (* let's consider it this opmiziable *)
                     true
                 | _ -> true))
@@ -117,13 +116,6 @@ let rewrite_closure blocks cont_pc clos_pc handler =
     blocks
 
 (****)
-
-(*
-get new location
-put continuation at new location
-update closure body to return to this location
-make current block continuation jump to closure body
-*)
 
 let rec find_mapping mapping x =
   match mapping with
@@ -210,11 +202,13 @@ let inline closures live_vars outer_optimizable pc (blocks, free_pc) =
             | `Exp exp -> Let (x, exp) :: rem, state
             | `Fail ->
                 if live_vars.(Var.idx f) = 1 && Bool.equal outer_optimizable f_optimizable
-                   (* inlining the code of an optimizable function could make
-                      this code unoptimized. (wrt to Jit compilers)
-                      At the moment, V8 doesn't optimize function containing try..catch.
-                      We disable inlining if the inner and outer functions don't have
-                      the same "contain_try_catch" property *)
+                   (* Inlining the code of an optimizable function could
+                      make this code unoptimized. (wrt to Jit compilers)
+
+                      At the moment, V8 doesn't optimize function
+                      containing try..catch.  We disable inlining if the
+                      inner and outer functions don't have the same
+                      "contain_try_catch" property *)
                 then
                   let blocks, cont_pc =
                     match rem, branch with
@@ -235,9 +229,9 @@ let inline closures live_vars outer_optimizable pc (blocks, free_pc) =
                   let blocks =
                     rewrite_closure blocks cont_pc (fst clos_cont) block.handler
                   in
-                  (* We do not really need this intermediate block.  It
-                     just avoid the need to find which function parameters
-                     are used in the function body. *)
+                  (* We do not really need this intermediate block.
+                     It just avoids the need to find which function
+                     parameters are used in the function body. *)
                   let blocks =
                     Addr.Map.add
                       (free_pc + 1)
@@ -249,17 +243,8 @@ let inline closures live_vars outer_optimizable pc (blocks, free_pc) =
                       blocks
                   in
                   [], (Branch (free_pc + 1, args), blocks, free_pc + 2)
-                else
-                  (* Format.eprintf "Do not inline because inner:%b outer:%b@." f_has_handler outer_has_handler; *)
-                  i :: rem, state)
+                else i :: rem, state)
         | Let (x, Closure (l, (pc, []))) -> (
-            (* Detect if the closure's body is just a simple call to an extern
-             * with the exact same argument count/forwarding The Closure l
-             * arguments above are the arguments applied to the Closure.  The
-             * body args are the args defined by the external binding (in the
-             * declared type) They are tracked all the way through compilation
-             * into byte code - that arity is entirely specified by the type.
-             * "%closure" is a special extern to designate inlined closure. *)
             let block = Addr.Map.find pc blocks in
             match block with
             | { body = [ Let (y, Prim (Extern prim, args)) ]
@@ -271,7 +256,7 @@ let inline closures live_vars outer_optimizable pc (blocks, free_pc) =
                 (* If the variable assigned the result of an extern call is the one
                    returned. *)
                 if Code.Var.compare y y' = 0
-                   && Primitive.has_registered_arity prim len
+                   && Primitive.has_arity prim len
                    (* If the args of the lambda are forwarded to the extern *)
                    && args_equal l args
                 then

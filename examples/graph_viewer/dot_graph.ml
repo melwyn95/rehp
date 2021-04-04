@@ -35,14 +35,17 @@ module IdMap = IntMap
 
 let last_id = ref (-1)
 
-let fresh_id () = incr last_id; !last_id
+let fresh_id () =
+  incr last_id;
+  !last_id
 
 type 'a sequence =
   { mutable count : int
   ; mutable seq : 'a IntMap.t
-  ; id : (id, 'a) Hashtbl.t }
+  ; id : (id, 'a) Hashtbl.t
+  }
 
-let make_sequence () = {count = 0; seq = IntMap.empty; id = Hashtbl.create 17}
+let make_sequence () = { count = 0; seq = IntMap.empty; id = Hashtbl.create 17 }
 
 let sequence_add s id v =
   if not (Hashtbl.mem s.id id)
@@ -50,25 +53,28 @@ let sequence_add s id v =
     let n = s.count in
     s.count <- n + 1;
     s.seq <- IntMap.add n v s.seq;
-    Hashtbl.add s.id id v )
+    Hashtbl.add s.id id v)
 
 module StringMap = Map.Make (String)
 
 type node =
   { name : string
   ; id : id
-  ; mutable node_attr : string StringMap.t }
+  ; mutable node_attr : string StringMap.t
+  }
 
 type edge =
   { head : node
   ; tail : node
   ; edge_id : id
-  ; mutable edge_attr : string StringMap.t }
+  ; mutable edge_attr : string StringMap.t
+  }
 
 type def_attr =
   { mutable g_attr : string StringMap.t
   ; mutable n_attr : string StringMap.t
-  ; mutable e_attr : string StringMap.t }
+  ; mutable e_attr : string StringMap.t
+  }
 
 type graph =
   { graph_id : id
@@ -77,22 +83,25 @@ type graph =
   ; subgraphs : graph sequence
   ; nodes : node sequence
   ; edges : edge sequence
-  ; parents : (id, graph) Hashtbl.t }
+  ; parents : (id, graph) Hashtbl.t
+  }
 
 type info =
-  { kind : [`Graph | `Digraph]
-  ; strict : bool }
+  { kind : [ `Graph | `Digraph ]
+  ; strict : bool
+  }
 
 type st =
   { st_info : info
   ; st_graphs : (string, graph) Hashtbl.t
   ; st_nodes : (string, node) Hashtbl.t
-  ; st_edges : (string * string * string, edge) Hashtbl.t }
+  ; st_edges : (string * string * string, edge) Hashtbl.t
+  }
 
 let make_def_attr () =
-  {g_attr = StringMap.empty; n_attr = StringMap.empty; e_attr = StringMap.empty}
+  { g_attr = StringMap.empty; n_attr = StringMap.empty; e_attr = StringMap.empty }
 
-let clone_def_attr a = {g_attr = a.g_attr; n_attr = a.n_attr; e_attr = a.e_attr}
+let clone_def_attr a = { g_attr = a.g_attr; n_attr = a.n_attr; e_attr = a.e_attr }
 
 let rec all_parents s g =
   if IntMap.mem g.graph_id s
@@ -103,7 +112,7 @@ let insert_graph parent g =
   if not (IntMap.mem g.graph_id (all_parents IntMap.empty parent))
   then (
     Hashtbl.add g.parents parent.graph_id parent;
-    sequence_add parent.subgraphs g.graph_id g )
+    sequence_add parent.subgraphs g.graph_id g)
 
 let make_graph parent name def_attrs =
   let g =
@@ -113,9 +122,12 @@ let make_graph parent name def_attrs =
     ; subgraphs = make_sequence ()
     ; nodes = make_sequence ()
     ; edges = make_sequence ()
-    ; parents = Hashtbl.create 17 }
+    ; parents = Hashtbl.create 17
+    }
   in
-  (match parent with Some parent -> insert_graph parent g | None -> ());
+  (match parent with
+  | Some parent -> insert_graph parent g
+  | None -> ());
   g
 
 let insert_node g n =
@@ -123,16 +135,18 @@ let insert_node g n =
   IntMap.iter (fun _ g -> sequence_add g.nodes n.id n) p
 
 let make_node g name def_attrs =
-  let node = {name; id = fresh_id (); node_attr = def_attrs.n_attr} in
-  insert_node g node; node
+  let node = { name; id = fresh_id (); node_attr = def_attrs.n_attr } in
+  insert_node g node;
+  node
 
 let insert_edge g e =
   let p = all_parents IntMap.empty g in
   IntMap.iter (fun _ g -> sequence_add g.edges e.edge_id e) p
 
 let make_edge g n1 n2 attrs =
-  let edge = {tail = n1; head = n2; edge_id = fresh_id (); edge_attr = attrs} in
-  insert_edge g edge; edge
+  let edge = { tail = n1; head = n2; edge_id = fresh_id (); edge_attr = attrs } in
+  insert_edge g edge;
+  edge
 
 (****)
 
@@ -140,17 +154,22 @@ let find_graph st parent name def_attrs =
   match name with
   | Some nm when Hashtbl.mem st.st_graphs nm ->
       let g = Hashtbl.find st.st_graphs nm in
-      (match parent with Some parent -> insert_graph parent g | None -> ());
+      (match parent with
+      | Some parent -> insert_graph parent g
+      | None -> ());
       g
   | _ ->
       let g = make_graph parent name def_attrs in
-      (match name with Some nm -> Hashtbl.add st.st_graphs nm g | None -> ());
+      (match name with
+      | Some nm -> Hashtbl.add st.st_graphs nm g
+      | None -> ());
       g
 
 let find_node st g name def_attrs =
   try
     let n = Hashtbl.find st.st_nodes name in
-    insert_node g n; n
+    insert_node g n;
+    n
   with Not_found ->
     let n = make_node g name def_attrs in
     Hashtbl.add st.st_nodes name n;
@@ -164,14 +183,19 @@ let lookup_edge st n1 n2 key =
 let find_edge st g n1 n2 key attrs =
   let key = if st.st_info.strict then Some "" else key in
   try
-    let key = match key with Some k -> k | None -> raise Not_found in
+    let key =
+      match key with
+      | Some k -> k
+      | None -> raise Not_found
+    in
     let e = lookup_edge st n1 n2 key in
-    insert_edge g e; e
+    insert_edge g e;
+    e
   with Not_found ->
     let e = make_edge g n1 n2 attrs in
-    ( match key with
+    (match key with
     | Some key -> Hashtbl.add st.st_edges (n1.name, n2.name, key) e
-    | None -> () );
+    | None -> ());
     e
 
 (****)
@@ -183,7 +207,10 @@ let get_edges x =
   | `Node (n, p) -> IntMap.add 0 n IntMap.empty, p
   | `Graph gr -> gr.nodes.seq, None
 
-let opt_add nm v m = match v with Some v -> StringMap.add nm v m | None -> m
+let opt_add nm v m =
+  match v with
+  | Some v -> StringMap.add nm v m
+  | None -> m
 
 let add_edge st g n1 p1 n2 p2 key attrs =
   let attrs = opt_add "tailport" p1 (opt_add "headport" p2 attrs) in
@@ -207,13 +234,13 @@ let rec compound_to_graph st g def_attr (c, attr) =
         match s with
         | `Node node ->
             `Node (find_node st g node.Dot_file.name def_attr, node.Dot_file.port)
-        | `Graph gr -> `Graph (graph_def_to_graph st (Some g) def_attr gr) )
+        | `Graph gr -> `Graph (graph_def_to_graph st (Some g) def_attr gr))
       c
   in
   match c with
   | [] -> assert false
-  | [`Node (n, _)] -> n.node_attr <- add_attributes n.node_attr attr
-  | [`Graph _] -> ()
+  | [ `Node (n, _) ] -> n.node_attr <- add_attributes n.node_attr attr
+  | [ `Graph _ ] -> ()
   | x :: r ->
       let attrs = add_attributes def_attr.e_attr attr in
       let key = try Some (StringMap.find "key" attrs) with Not_found -> None in
@@ -225,10 +252,10 @@ and body_to_graph st g def_attr body =
       match stmt with
       | `Compound c -> compound_to_graph st g def_attr c
       | `Attributes (typ, l) -> (
-        match typ with
-        | `Graph -> def_attr.g_attr <- add_attributes def_attr.g_attr l
-        | `Node -> def_attr.n_attr <- add_attributes def_attr.n_attr l
-        | `Edge -> def_attr.e_attr <- add_attributes def_attr.e_attr l ) )
+          match typ with
+          | `Graph -> def_attr.g_attr <- add_attributes def_attr.g_attr l
+          | `Node -> def_attr.n_attr <- add_attributes def_attr.n_attr l
+          | `Edge -> def_attr.e_attr <- add_attributes def_attr.e_attr l))
     body
 
 and graph_def_to_graph st g def_attr gr =
@@ -240,10 +267,11 @@ and graph_def_to_graph st g def_attr gr =
 
 let of_file_spec f =
   let st =
-    { st_info = {kind = f.Dot_file.kind; strict = f.Dot_file.strict}
+    { st_info = { kind = f.Dot_file.kind; strict = f.Dot_file.strict }
     ; st_graphs = Hashtbl.create 101
     ; st_nodes = Hashtbl.create 101
-    ; st_edges = Hashtbl.create 101 }
+    ; st_edges = Hashtbl.create 101
+    }
   in
   st.st_info, graph_def_to_graph st None (make_def_attr ()) f.Dot_file.graph
 

@@ -19,6 +19,7 @@
 
 open Stdlib
 open Rehp
+open Poly
 
 class type mapper =
   object
@@ -205,8 +206,8 @@ class map_for_share_constant =
       match l with
       | [] -> []
       | ((Statement (Expression_statement (EStr _)), _) as prolog) :: rest ->
-          prolog :: List.map_tc rest ~f:(fun (x, loc) -> m#source x, loc)
-      | rest -> List.map_tc rest ~f:(fun (x, loc) -> m#source x, loc)
+          prolog :: List.map rest ~f:(fun (x, loc) -> m#source x, loc)
+      | rest -> List.map rest ~f:(fun (x, loc) -> m#source x, loc)
   end
 
 class replace_expr f =
@@ -516,7 +517,7 @@ class rename_variable keeps =
           let w =
             let v = Code.Var.fresh_n name in
             let sub = function
-              | Id.S {name = name'; _} when name' = name -> Id.V v
+              | Id.S {name = name'; _} when Poly.(name' = name) -> Id.V v
               | x -> x
             in
             let s = new subst sub in
@@ -590,7 +591,7 @@ class clean =
         List.fold_left l ~init:([], []) ~f:(fun (st_rev, sources_rev) (x, loc) ->
             match x with
             | Statement s -> (s, loc) :: st_rev, sources_rev
-            | Function_declaration _ as x when st_rev = [] ->
+            | Function_declaration _ as x when Poly.(st_rev = []) ->
                 [], (m#source x, loc) :: sources_rev
             | Function_declaration _ as x ->
                 [], (m#source x, loc) :: append_st st_rev sources_rev)

@@ -35,9 +35,7 @@ let do_by_id s f = try f (Dom_html.getElementById s) with Not_found -> ()
 
 (* load file using a synchronous XMLHttpRequest *)
 let load_resource_aux filename url =
-  Js_of_ocaml_lwt.XmlHttpRequest.perform_raw
-    ~response_type:XmlHttpRequest.ArrayBuffer
-    url
+  Js_of_ocaml_lwt.XmlHttpRequest.perform_raw ~response_type:XmlHttpRequest.ArrayBuffer url
   >|= fun frame ->
   if frame.Js_of_ocaml_lwt.XmlHttpRequest.code = 200
   then
@@ -45,8 +43,7 @@ let load_resource_aux filename url =
       frame.Js_of_ocaml_lwt.XmlHttpRequest.content
       (fun () -> Printf.eprintf "Could not load %s\n" filename)
       (fun b ->
-        Sys_js.update_file ~name:filename ~content:(Typed_array.String.of_arrayBuffer b)
-        )
+        Sys_js.update_file ~name:filename ~content:(Typed_array.String.of_arrayBuffer b))
   else ()
 
 let load_resource scheme ~prefix ~path:suffix =
@@ -67,23 +64,36 @@ let exec' s =
   if not res then Format.eprintf "error while evaluating %s@." s
 
 module Version = struct
-  let split_char sep p =
+  type t = int list
+
+  let split_char ~sep p =
     let len = String.length p in
     let rec split beg cur =
       if cur >= len
-      then if cur - beg > 0 then [String.sub p beg (cur - beg)] else []
-      else if p.[cur] = sep
+      then if cur - beg > 0 then [ String.sub p beg (cur - beg) ] else []
+      else if sep p.[cur]
       then String.sub p beg (cur - beg) :: split (cur + 1) (cur + 1)
       else split beg (cur + 1)
     in
     split 0 0
 
-  type t = int list
-
   let split v =
-    match split_char '+' v with
+    match
+      split_char
+        ~sep:(function
+          | '+' | '-' | '~' -> true
+          | _ -> false)
+        v
+    with
     | [] -> assert false
-    | x :: _ -> List.map int_of_string (split_char '.' x)
+    | x :: _ ->
+        List.map
+          int_of_string
+          (split_char
+             ~sep:(function
+               | '.' -> true
+               | _ -> false)
+             x)
 
   let current = split Sys.ocaml_version
 
@@ -91,17 +101,20 @@ module Version = struct
 
   let rec compare v v' =
     match v, v' with
-    | [x], [y] -> compint x y
+    | [ x ], [ y ] -> compint x y
     | [], [] -> 0
     | [], y :: _ -> compint 0 y
     | x :: _, [] -> compint x 0
-    | x :: xs, y :: ys -> ( match compint x y with 0 -> compare xs ys | n -> n )
+    | x :: xs, y :: ys -> (
+        match compint x y with
+        | 0 -> compare xs ys
+        | n -> n)
 end
 
 let setup_toplevel () =
   JsooTop.initialize ();
   Sys.interactive := false;
-  if Version.compare Version.current [4; 07] >= 0 then exec' "open Stdlib";
+  if Version.compare Version.current [ 4; 07 ] >= 0 then exec' "open Stdlib";
   exec'
     "module Lwt_main = struct\n\
     \             let run t = match Lwt.state t with\n\
@@ -136,8 +149,8 @@ let resize ~container ~textbox () =
 
 let setup_printers () =
   exec'
-    "let _print_error fmt e = Format.pp_print_string fmt \
-     (Js_of_ocaml.Js.string_of_error e)";
+    "let _print_error fmt e = Format.pp_print_string fmt (Js_of_ocaml.Js.string_of_error \
+     e)";
   Topdirs.dir_install_printer Format.std_formatter Longident.(Lident "_print_error");
   exec' "let _print_unit fmt (_ : 'a) : 'a = Format.pp_print_string fmt \"()\"";
   Topdirs.dir_install_printer Format.std_formatter Longident.(Lident "_print_unit")
@@ -145,20 +158,22 @@ let setup_printers () =
 let setup_examples ~container ~textbox =
   let r = Regexp.regexp "^\\(\\*+(.*)\\*+\\)$" in
   let all = ref [] in
-  ( try
-      let ic = open_in "/static/examples.ml" in
-      while true do
-        let line = input_line ic in
-        match Regexp.string_match r line 0 with
-        | Some res ->
-            let name =
-              match Regexp.matched_group res 1 with Some s -> s | None -> assert false
-            in
-            all := `Title name :: !all
-        | None -> all := `Content line :: !all
-      done;
-      assert false
-    with _ -> () );
+  (try
+     let ic = open_in "/static/examples.ml" in
+     while true do
+       let line = input_line ic in
+       match Regexp.string_match r line 0 with
+       | Some res ->
+           let name =
+             match Regexp.matched_group res 1 with
+             | Some s -> s
+             | None -> assert false
+           in
+           all := `Title name :: !all
+       | None -> all := `Content line :: !all
+     done;
+     assert false
+   with _ -> ());
   let example_container = by_id "toplevel-examples" in
   let _ =
     List.fold_left
@@ -170,17 +185,20 @@ let setup_examples ~container ~textbox =
               Tyxml_js.Html.(
                 a
                   ~a:
-                    [ a_class ["list-group-item"]
+                    [ a_class [ "list-group-item" ]
                     ; a_onclick (fun _ ->
                           textbox##.value := (Js.string acc)##trim;
                           Lwt.async (fun () ->
                               resize ~container ~textbox ()
-                              >>= fun () -> textbox##focus; Lwt.return_unit );
-                          true ) ]
-                  [txt name])
+                              >>= fun () ->
+                              textbox##focus;
+                              Lwt.return_unit);
+                          true)
+                    ]
+                  [ txt name ])
             in
             Dom.appendChild example_container (Tyxml_js.To_dom.of_a a);
-            "" )
+            "")
       ""
       !all
   in
@@ -194,8 +212,10 @@ let parse_hash () =
 
 let rec iter_on_sharp ~f x =
   Js.Opt.iter (Dom_html.CoerceTo.element x) (fun e ->
-      if Js.to_bool (e##.classList##contains (Js.string "sharp")) then f e );
-  match Js.Opt.to_option x##.nextSibling with None -> () | Some n -> iter_on_sharp ~f n
+      if Js.to_bool (e##.classList##contains (Js.string "sharp")) then f e);
+  match Js.Opt.to_option x##.nextSibling with
+  | None -> ()
+  | Some n -> iter_on_sharp ~f n
 
 let setup_share_button ~output =
   do_by_id "btn-share" (fun e ->
@@ -208,24 +228,25 @@ let setup_share_button ~output =
               output##.firstChild
               (iter_on_sharp ~f:(fun e ->
                    code :=
-                     Js.Opt.case e##.textContent (fun () -> "") Js.to_string :: !code ));
+                     Js.Opt.case e##.textContent (fun () -> "") Js.to_string :: !code));
             let code_encoded = B64.encode (String.concat "" (List.rev !code)) in
             let url, is_file =
               match Url.Current.get () with
-              | Some (Url.Http url) -> Url.Http {url with Url.hu_fragment = ""}, false
-              | Some (Url.Https url) -> Url.Https {url with Url.hu_fragment = ""}, false
-              | Some (Url.File url) -> Url.File {url with Url.fu_fragment = ""}, true
+              | Some (Url.Http url) -> Url.Http { url with Url.hu_fragment = "" }, false
+              | Some (Url.Https url) -> Url.Https { url with Url.hu_fragment = "" }, false
+              | Some (Url.File url) -> Url.File { url with Url.fu_fragment = "" }, true
               | _ -> assert false
             in
             let frag =
               let frags = parse_hash () in
-              let frags = List.remove_assoc "code" frags @ ["code", code_encoded] in
+              let frags = List.remove_assoc "code" frags @ [ "code", code_encoded ] in
               Url.encode_arguments frags
             in
             let uri = Url.string_of_url url ^ "#" ^ frag in
             let append_url str =
               let dom =
-                Tyxml_js.Html.(p [txt "Share this url : "; a ~a:[a_href str] [txt str]])
+                Tyxml_js.Html.(
+                  p [ txt "Share this url : "; a ~a:[ a_href str ] [ txt str ] ])
               in
               Dom.appendChild output (Tyxml_js.To_dom.of_element dom)
             in
@@ -242,14 +263,15 @@ let setup_share_button ~output =
                       in
                       Lwt.bind (Js_of_ocaml_lwt.Jsonp.call uri) (fun o ->
                           let str = Js.to_string o##.shorturl in
-                          append_url str; Lwt.return_unit ) )
+                          append_url str;
+                          Lwt.return_unit))
                   (fun exn ->
                     Format.eprintf
                       "Could not generate short url. reason: %s@."
                       (Printexc.to_string exn);
                     append_url uri;
-                    Lwt.return_unit ) );
-            Js._false ) )
+                    Lwt.return_unit));
+            Js._false))
 
 let setup_js_preview () =
   let ph = by_id "last-js" in
@@ -275,13 +297,13 @@ let highlight_location loc =
       then
         let from_ = if !x = line1 then `Pos col1 else `Pos 0 in
         let to_ = if !x = line2 then `Pos col2 else `Last in
-        Colorize.highlight from_ to_ e )
+        Colorize.highlight from_ to_ e)
 
 let append colorize output cl s =
   Dom.appendChild output (Tyxml_js.To_dom.of_element (colorize ~a_class:cl s))
 
 module History = struct
-  let data = ref [|""|]
+  let data = ref [| "" |]
 
   let idx = ref 0
 
@@ -321,13 +343,13 @@ module History = struct
     if !idx > 0
     then (
       decr idx;
-      textbox##.value := Js.string !data.(!idx) )
+      textbox##.value := Js.string !data.(!idx))
 
   let next textbox =
     if !idx < Array.length !data - 1
     then (
       incr idx;
-      textbox##.value := Js.string !data.(!idx) )
+      textbox##.value := Js.string !data.(!idx))
 end
 
 let run _ =
@@ -364,7 +386,10 @@ let run _ =
       if String.length txt = pos then raise Not_found;
       let _ = String.index_from txt pos '\n' in
       Js._true
-    with Not_found -> History.current txt; History.next textbox; Js._false
+    with Not_found ->
+      History.current txt;
+      History.next textbox;
+      Js._false
   in
   let history_up _e =
     let txt = Js.to_string textbox##.value in
@@ -373,7 +398,10 @@ let run _ =
       if pos < 0 then raise Not_found;
       let _ = String.rindex_from txt pos '\n' in
       Js._true
-    with Not_found -> History.current txt; History.previous textbox; Js._false
+    with Not_found ->
+      History.current txt;
+      History.previous textbox;
+      Js._false
   in
   let meta e =
     let b = Js.to_bool in
@@ -384,32 +412,43 @@ let run _ =
   textbox##.onkeyup :=
     Dom_html.handler (fun _ ->
         Lwt.async (resize ~container ~textbox);
-        Js._true );
+        Js._true);
   textbox##.onchange :=
     Dom_html.handler (fun _ ->
         Lwt.async (resize ~container ~textbox);
-        Js._true );
+        Js._true);
   textbox##.onkeydown :=
     Dom_html.handler (fun e ->
         match e##.keyCode with
-        | 13 when not (meta e || shift e) -> Lwt.async execute; Js._false
+        | 13 when not (meta e || shift e) ->
+            Lwt.async execute;
+            Js._false
         | 13 ->
             Lwt.async (resize ~container ~textbox);
             Js._true
-        | 09 -> Indent.textarea textbox; Js._false
+        | 09 ->
+            Indent.textarea textbox;
+            Js._false
         | 76 when meta e ->
             output##.innerHTML := Js.string "";
             Js._true
-        | 75 when meta e -> setup_toplevel (); Js._false
+        | 75 when meta e ->
+            setup_toplevel ();
+            Js._false
         | 38 -> history_up e
         | 40 -> history_down e
-        | _ -> Js._true );
+        | _ -> Js._true);
   (Lwt.async_exception_hook :=
      fun exc ->
        Format.eprintf "exc during Lwt.async: %s@." (Printexc.to_string exc);
-       match exc with Js.Error e -> Firebug.console##log e##.stack | _ -> ());
+       match exc with
+       | Js.Error e -> Firebug.console##log e##.stack
+       | _ -> ());
   Lwt.async (fun () ->
-      resize ~container ~textbox () >>= fun () -> textbox##focus; Lwt.return_unit );
+      resize ~container ~textbox ()
+      >>= fun () ->
+      textbox##focus;
+      Lwt.return_unit);
   Graphics_support.init (by_id_coerce "test-canvas" Dom_html.CoerceTo.canvas);
   Sys_js.set_channel_flusher caml_chan (append Colorize.ocaml output "caml");
   Sys_js.set_channel_flusher sharp_chan (append Colorize.ocaml output "sharp");
@@ -443,4 +482,8 @@ let run _ =
         (Js.string (Printexc.to_string exc))
         exc
 
-let _ = Dom_html.window##.onload := Dom_html.handler (fun _ -> run (); Js._false)
+let _ =
+  Dom_html.window##.onload :=
+    Dom_html.handler (fun _ ->
+        run ();
+        Js._false)

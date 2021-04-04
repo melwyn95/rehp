@@ -1765,8 +1765,11 @@ let program = (f, ~source_map=?, p) => {
     let urlData =
       switch (out_file) {
       | None =>
-        let data = Source_map_io.to_string(sm);
-        "data:application/json;base64," ++ B64.encode(data);
+        let data = Source_map_io.to_string(sm) |> Base64.encode;
+        switch (data) {
+        | Ok(data) => "data:application/json;base64," ++ data;
+        | _ => failwith("error: failed to base 64 encode data")
+        };
       | Some(out_file) =>
         Source_map_io.to_file(sm, out_file);
         Filename.basename(out_file);

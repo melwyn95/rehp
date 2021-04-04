@@ -31,7 +31,7 @@ let f:
     ~source_map: (option(string), Source_map.t)=?,
     ~custom_header: Module_prep.parsed,
     Pretty_print.t,
-    Parse_bytecode.Debug.data,
+    Parse_bytecode.Debug.t,
     Code.program
   ) =>
   unit;

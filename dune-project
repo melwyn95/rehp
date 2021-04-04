@@ -1,2 +1,3 @@
-(lang dune 1.4)
-(using fmt 1.0)
+(lang dune 2.2)
+(formatting (enabled_for ocaml))
+(name js_of_ocaml)

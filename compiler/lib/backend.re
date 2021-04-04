@@ -1,4 +1,5 @@
 open Stdlib;
+open Poly;
 
 exception Not_an_ident;
 let times = Debug.find("times");
@@ -211,8 +212,8 @@ let set_backend = (backend: (module Backend_implementation)) => {
   };
   module NewBackend = (val backend);
   current := Some(backend);
-  VarPrinter.add_reserved(StringSet.elements(NewBackend.keyword()));
-  VarPrinter.add_reserved(StringSet.elements(NewBackend.provided()));
+  Var_printer.add_reserved(StringSet.elements(NewBackend.keyword()));
+  Var_printer.add_reserved(StringSet.elements(NewBackend.provided()));
 };
 
 module Current: Backend_implementation = {

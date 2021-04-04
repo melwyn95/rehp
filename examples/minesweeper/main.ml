@@ -20,10 +20,10 @@ let int_input name value =
   input##.value := js (string_of_int !value);
   input##.onchange :=
     Html.handler (fun _ ->
-        ( try value := int_of_string (Js.to_string input##.value)
-          with Invalid_argument _ -> () );
+        (try value := int_of_string (Js.to_string input##.value)
+         with Invalid_argument _ -> ());
         input##.value := js (string_of_int !value);
-        Js._false );
+        Js._false);
   Dom.appendChild res input;
   res
 
@@ -36,9 +36,7 @@ let button name callback =
   res
 
 let onload _ =
-  let main =
-    Js.Opt.get (document##getElementById (js "main")) (fun () -> assert false)
-  in
+  let main = Js.Opt.get (document##getElementById (js "main")) (fun () -> assert false) in
   let nbr, nbc, nbm = ref 10, ref 12, ref 15 in
   Dom.appendChild main (int_input "Number of columns" nbr);
   Dom.appendChild main (Html.createBr document);
@@ -52,7 +50,7 @@ let onload _ =
          let div = Html.createDiv document in
          Dom.appendChild main div;
          Minesweeper.run div !nbc !nbr !nbm;
-         Js._false ));
+         Js._false));
   Js._false
 
 let _ = Html.window##.onload := Html.handler onload

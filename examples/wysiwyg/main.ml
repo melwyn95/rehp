@@ -34,9 +34,15 @@ let is_visible_text s =
     then ()
     else if s.[i] = '\\' && i < len - 1 && s.[i + 1] = '\\'
     then loop (i + 2)
-    else match s.[i] with '\n' -> loop (i + 1) | _ -> raise (Break true)
+    else
+      match s.[i] with
+      | '\n' -> loop (i + 1)
+      | _ -> raise (Break true)
   in
-  try loop 0; false with Break b -> b
+  try
+    loop 0;
+    false
+  with Break b -> b
 
 open Dom
 
@@ -58,9 +64,9 @@ let rec html2wiki body =
             let inner = html2wiki node in
             add_str inner ~surr:"//"
         | "#text" -> (
-          match Js.Opt.to_option node##.nodeValue with
-          | Some x -> Buffer.add_string ans (Js.to_string x)
-          | None -> () )
+            match Js.Opt.to_option node##.nodeValue with
+            | Some x -> Buffer.add_string ans (Js.to_string x)
+            | None -> ())
         | "P" ->
             let inner = html2wiki node in
             add_str (inner ^ "\n\n")
@@ -83,15 +89,17 @@ let rec html2wiki body =
                 match Js.to_string s with
                 | "global" ->
                     let desc = html2wiki node in
-                    Buffer.add_string ans (String.concat "" ["[["; url; "|"; desc; "]]"])
-                | "wiki" -> String.concat "" ["[["; url; "]]"] |> Buffer.add_string ans
-                | _ -> Buffer.add_string ans "^error2_in_anchor^" )
+                    Buffer.add_string
+                      ans
+                      (String.concat "" [ "[["; url; "|"; desc; "]]" ])
+                | "wiki" -> String.concat "" [ "[["; url; "]]" ] |> Buffer.add_string ans
+                | _ -> Buffer.add_string ans "^error2_in_anchor^")
         | ("H1" | "H2" | "H3") as hh ->
             let n = int_of_char hh.[1] - int_of_char '0' + 1 in
             let prefix = String.make n '=' in
             let inner = html2wiki node in
             Buffer.add_string ans (prefix ^ inner ^ "\n\n")
-        | _ as name -> Buffer.add_string ans ("^" ^ name ^ "^") )
+        | _ as name -> Buffer.add_string ans ("^" ^ name ^ "^"))
   done;
   Buffer.contents ans
 
@@ -114,17 +122,21 @@ let onload _ =
       let iWin = iframe##.contentWindow in
       Dom.appendChild body (Html.createBr d);
       (* see http://www.quirksmode.org/dom/execCommand.html
-     * http://www.mozilla.org/editor/midas-spec.html
-     *)
+       * http://www.mozilla.org/editor/midas-spec.html
+       *)
       let createButton ?(show = Js._false) ?(value = None) title action =
         let but = Html.createInput ?_type:(Some (Js.string "submit")) d in
         but##.value := Js.string title;
-        let wrap s = match s with None -> Js.null | Some s -> Js.some (Js.string s) in
+        let wrap s =
+          match s with
+          | None -> Js.null
+          | Some s -> Js.some (Js.string s)
+        in
         but##.onclick :=
           Html.handler (fun _ ->
               iWin##focus;
               iDoc##execCommand (Js.string action) show (wrap value);
-              Js._true );
+              Js._true);
         Dom.appendChild body but;
         but
       in
@@ -150,19 +162,19 @@ let onload _ =
              let link =
                String.concat
                  ""
-                 ["<a href=\""; link; "\" wysitype=\"global\">"; desc; "</a>"]
+                 [ "<a href=\""; link; "\" wysitype=\"global\">"; desc; "</a>" ]
              in
              iWin##alert (Js.string link);
              iDoc##execCommand
                (Js.string "inserthtml")
                Js._false
                (Js.some (Js.string link));
-             Js._true );
+             Js._true);
       (createButton "link2wiki" "inserthtml")##.onclick
       := Html.handler (fun _ ->
              let link = prompt "Enter a wikipage" "lololo" in
              let link =
-               ["<a href=\""; link; "\" wysitype=\"wiki\">"; link; "</a>"]
+               [ "<a href=\""; link; "\" wysitype=\"wiki\">"; link; "</a>" ]
                |> String.concat ""
              in
              iWin##alert (Js.string link);
@@ -170,7 +182,7 @@ let onload _ =
                (Js.string "inserthtml")
                Js._false
                (Js.some (Js.string link));
-             Js._true );
+             Js._true);
       Dom.appendChild body (Html.createBr d);
       let preview = Html.createTextarea d in
       preview##.readOnly := Js._true;
@@ -192,16 +204,16 @@ let onload _ =
         let n =
           if text <> old_text
           then (
-            ( try
-                preview##.value := Js.string text;
-                wikiFrame##.value := Js.string (html2wiki (iDoc##.body :> Dom.node Js.t))
-              with _ -> () );
-            20 )
+            (try
+               preview##.value := Js.string text;
+               wikiFrame##.value := Js.string (html2wiki (iDoc##.body :> Dom.node Js.t))
+             with _ -> ());
+            20)
           else max 0 (n - 1)
         in
         Lwt_js.sleep (if n = 0 then 0.5 else 0.1) >>= fun () -> dyn_preview text n
       in
-      ignore (dyn_preview "" 0) );
+      ignore (dyn_preview "" 0));
   Js._false
 
 let _ = Html.window##.onload := Html.handler onload

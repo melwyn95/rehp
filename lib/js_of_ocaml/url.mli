@@ -35,23 +35,25 @@ val urlencode : ?with_plus:bool -> string -> string
     [with_plus] is [true] (default) then ['+']'s are escaped as ["%2B"]. If not,
     ['+']'s are left as is. *)
 
-(** The type for HTTP(s) url. *)
 type http_url =
   { hu_host : string  (** The host part of the url. *)
   ; hu_port : int  (** The port for the connection if any. *)
-  ; hu_path : string list  (** The path splitted on ['/'] characters. *)
+  ; hu_path : string list  (** The path split on ['/'] characters. *)
   ; hu_path_string : string  (** The original entire path. *)
   ; hu_arguments : (string * string) list
         (** Arguments as a field-value
                                              association list.*)
-  ; hu_fragment : string  (** The fragment part (after the ['#'] character). *) }
+  ; hu_fragment : string  (** The fragment part (after the ['#'] character). *)
+  }
+(** The type for HTTP(s) url. *)
 
-(** The type for local file urls. *)
 type file_url =
   { fu_path : string list
   ; fu_path_string : string
   ; fu_arguments : (string * string) list
-  ; fu_fragment : string }
+  ; fu_fragment : string
+  }
+(** The type for local file urls. *)
 
 (** The type for urls. *)
 type url =
@@ -75,7 +77,8 @@ val encode_arguments : (string * string) list -> string
 
 val decode_arguments : string -> (string * string) list
 (** [decode_arguments s] parses [s] returning the sliced-diced
-    association list. *)
+    association list. [s] should be only the arguments part (after the '?')
+    not the whole url. *)
 
 (** The following part allow one to handle Url object in a much higher level
     than what a string provides. *)

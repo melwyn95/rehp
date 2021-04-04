@@ -18,6 +18,36 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
+module Num : sig
+  type t
+
+  (** Conversions *)
+
+  val of_string_unsafe : string -> t
+
+  val of_int32 : int32 -> t
+
+  val of_float : float -> t
+
+  val to_string : t -> string
+
+  val to_int32 : t -> int32
+
+  (** Predicates *)
+
+  val is_zero : t -> bool
+
+  val is_one : t -> bool
+
+  val is_neg : t -> bool
+
+  (** Arithmetic *)
+
+  val add : t -> t -> t
+
+  val neg : t -> t
+end
+
 module Label : sig
   type t
 
@@ -45,7 +75,8 @@ type identifier = string
 type ident_string = Id.ident_string =
   { name : identifier
   ; var : Code.Var.t option
-  ; loc : Loc.t }
+  ; loc : location
+  }
 
 type ident = Id.t =
   | S of ident_string
@@ -105,14 +136,19 @@ and unop =
   | IncrB
   | DecrB
 
-and arguments = expression list
+and spread =
+  [ `Spread
+  | `Not_spread
+  ]
+
+and arguments = (expression * spread) list
 
 and property_name_and_value_list = (property_name * expression) list
 
-and property_name = Id.property_name =
+and property_name =
   | PNI of identifier
   | PNS of string
-  | PNN of float
+  | PNN of Num.t
 
 and raw_segment =
   | RawText of string
@@ -135,7 +171,7 @@ and expression =
          escape sequences. *)
   | EArr of array_literal
   | EBool of bool
-  | ENum of float
+  | ENum of Num.t
   | EObj of property_name_and_value_list
   | EQuote of string
   | ERegexp of string * string option
@@ -154,14 +190,12 @@ and statement =
   | Do_while_statement of (statement * location) * expression
   | While_statement of expression * (statement * location)
   | For_statement of
-      (expression option, variable_declaration list) Stdlib.either
+      (expression option, variable_declaration list) either
       * expression option
       * expression option
       * (statement * location)
   | ForIn_statement of
-      (expression, variable_declaration) Stdlib.either
-      * expression
-      * (statement * location)
+      (expression, variable_declaration) either * expression * (statement * location)
   | Continue_statement of Label.t option
   | Break_statement of Label.t option
   | Return_statement of expression option
@@ -174,6 +208,10 @@ and statement =
   | Throw_statement of expression
   | Try_statement of block * (ident * block) option * block option
   | Debugger_statement
+
+and ('left, 'right) either =
+  | Left of 'left
+  | Right of 'right
 
 and block = statement_list
 
@@ -207,6 +245,8 @@ and source_element =
 val string_of_number : float -> string
 
 val compare_ident : ident -> ident -> int
+
+val is_ident : string -> bool
 
 val ident : ?loc:location -> ?var:Code.Var.t -> identifier -> ident
 

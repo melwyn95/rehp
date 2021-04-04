@@ -1,4 +1,5 @@
 open Stdlib;
+open Poly;
 
 /**
  * All the code that "expands" high level Rehp into concrete Php.
@@ -628,7 +629,7 @@ and forStatement = (output, input, (s, loc), label) => {
 
   /* shield any continues that have this loop's label */
   let freeLabels =
-    List.filter(label => label != myLabel, nextOutput.freeLabels);
+    List.filter(label => Poly.(label != myLabel), nextOutput.freeLabels);
 
   let li =
     switch (input.enclosedBy, List.length(freeLabels) > 0) {
@@ -657,7 +658,7 @@ and forStatement = (output, input, (s, loc), label) => {
        and also check the continueLabel to break to the outter loop */
     | (LabelledForLoop(parentLabel), true) =>
       let onlyContinueToParentLabel =
-        List.for_all(label => label == parentLabel, freeLabels);
+        List.for_all(label => Poly.(label == parentLabel), freeLabels);
 
       /* if the unshielded continues inside the loop only continue
          to the enclosing loop, then we don't need to break */

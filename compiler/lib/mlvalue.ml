@@ -20,9 +20,9 @@
 open! Stdlib
 module J = Javascript
 
-let zero = J.ENum 0.0
+let zero = J.ENum (J.Num.of_int32 0l)
 
-let one = J.ENum 1.0
+let one = J.ENum (J.Num.of_int32 1l)
 
 (* JavaScript engines recognize the pattern 'typeof x==="number"'; if the string is
    shared, less efficient code is generated. *)
@@ -36,12 +36,12 @@ let is_immediate e = type_of_is_number J.EqEqEq e
 module Block = struct
   let make ~tag ~args =
     J.EArr
-      (List.map ~f:(fun x -> Some x) (J.ENum (Int32.to_float (Int32.of_int(tag))) :: args))
+      (List.map ~f:(fun x -> Some x) (J.ENum (J.Num.of_int32 (Int32.of_int tag)) :: args))
 
   let tag e = J.EAccess (e, zero)
 
   let field e idx =
-    let adjusted = J.ENum (Int32.to_float (Int32.of_int (idx + 1) )) in
+    let adjusted = J.ENum (J.Num.of_int32 (Int32.of_int (idx + 1))) in
     J.EAccess (e, adjusted)
 end
 
@@ -55,8 +55,8 @@ module Array = struct
   let field e i =
     match i with
     | J.ENum n ->
-        let idx = Int32.of_float n in
-        let adjusted = J.ENum (Int32.to_float (Int32.add idx 1l)) in
+        let idx = J.Num.to_int32 n in
+        let adjusted = J.ENum (J.Num.of_int32 (Int32.add idx 1l)) in
         J.EAccess (e, adjusted)
     | J.EUn (J.Neg, _) -> failwith "Negative field indexes are not allowed"
     | _ ->

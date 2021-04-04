@@ -19,6 +19,86 @@
  *)
 open! Stdlib
 
+module Num : sig
+  type t
+
+  (** Conversions *)
+
+  val of_string_unsafe : string -> t
+
+  val of_int32 : int32 -> t
+
+  val of_float : float -> t
+
+  val to_string : t -> string
+
+  val to_int32 : t -> int32
+
+  (** Predicates *)
+
+  val is_zero : t -> bool
+
+  val is_one : t -> bool
+
+  val is_neg : t -> bool
+
+  (** Arithmetic *)
+
+  val add : t -> t -> t
+
+  val neg : t -> t
+end = struct
+  type t = string
+
+  let of_string_unsafe s = s
+
+  let to_string s = s
+
+  let to_int32 s =
+    if String.is_prefix s ~prefix:"0"
+       && String.length s > 1
+       && String.for_all s ~f:(function
+              | '0' .. '7' -> true
+              | _ -> false)
+    then (* octal notation *)
+      Int32.of_string ("0o" ^ s)
+    else Int32.of_string s
+
+  let of_int32 = Int32.to_string
+
+  let of_float v =
+    match Float.classify_float v with
+    | FP_nan -> "NaN"
+    | FP_zero ->
+        (* [1/-0] < 0. seems to be the only way to detect -0 in JavaScript *)
+        if Float.(1. /. v < 0.) then "-0." else "0."
+    | FP_infinite -> if Float.(v < 0.) then "-Infinity" else "Infinity"
+    | FP_normal | FP_subnormal ->
+        let vint = int_of_float v in
+        if Float.equal (float_of_int vint) v
+        then Printf.sprintf "%d." vint
+        else
+          let s1 = Printf.sprintf "%.12g" v in
+          if Float.equal v (float_of_string s1)
+          then s1
+          else
+            let s2 = Printf.sprintf "%.15g" v in
+            if Float.equal v (float_of_string s2) then s2 else Printf.sprintf "%.18g" v
+
+  let is_zero s = String.equal s "0"
+
+  let is_one s = String.equal s "1"
+
+  let is_neg s = Char.equal s.[0] '-'
+
+  let neg s =
+    match String.drop_prefix s ~prefix:"-" with
+    | None -> "-" ^ s
+    | Some s -> s
+
+  let add a b = of_int32 (Int32.add (to_int32 a) (to_int32 b))
+end
+
 module Label = struct
   type t =
     | L of int
@@ -27,7 +107,7 @@ module Label = struct
   (* TODO: Properly refactor generate.ml and others so that it can
      produce Labels that don't depend on any one particular backend. For now, this is
      okay because valid PHP identifiers are valid JS identifiers. *)
-  let printer = VarPrinter.create VarPrinter.Alphabet.php
+  let printer = Var_printer.create Var_printer.Alphabet.php
 
   let zero = L 0
 
@@ -36,7 +116,7 @@ module Label = struct
     | S _ -> assert false
 
   let to_string = function
-    | L t -> VarPrinter.to_string printer t
+    | L t -> Var_printer.to_string printer t
     | S s -> s
 
   let of_string s = S s
@@ -52,14 +132,15 @@ type identifier = string
 type ident_string = Id.ident_string =
   { name : identifier
   ; var : Code.Var.t option
-  ; loc : Loc.t }
+  ; loc : location
+  }
 
 type ident = Id.t =
   | S of ident_string
   | V of Code.Var.t
 
 (* A.3 Expressions *)
-and array_literal = element_list
+and array_litteral = element_list
 
 and element_list = expression option list
 
@@ -113,14 +194,19 @@ and unop =
   | IncrB
   | DecrB
 
-and arguments = expression list
+and spread =
+  [ `Spread
+  | `Not_spread
+  ]
+
+and arguments = (expression * spread) list
 
 and property_name_and_value_list = (property_name * expression) list
 
-and property_name = Id.property_name =
+and property_name =
   | PNI of identifier
   | PNS of string
-  | PNN of float
+  | PNN of Num.t
 
 and raw_segment =
   | RawText of string
@@ -137,10 +223,10 @@ and expression =
   | ENew of expression * arguments option
   | EVar of ident
   | EFun of function_expression
-  | EStr of string * [`Bytes | `Utf8]
-  | EArr of array_literal
+  | EStr of string * [ `Bytes | `Utf8 ]
+  | EArr of array_litteral
   | EBool of bool
-  | ENum of float
+  | ENum of Num.t
   | EObj of property_name_and_value_list
   | EQuote of string
   | ERegexp of string * string option
@@ -176,6 +262,10 @@ and statement =
   | Try_statement of block * (ident * block) option * block option
   | Debugger_statement
 
+and ('left, 'right) either =
+  | Left of 'left
+  | Right of 'right
+
 and block = statement_list
 
 and statement_list = (statement * location) list
@@ -206,19 +296,19 @@ and source_element =
   | Function_declaration of function_declaration
 
 let string_of_number v =
-  if v = infinity
+  if Poly.(v = infinity)
   then "Infinity"
-  else if v = neg_infinity
+  else if Poly.(v = neg_infinity)
   then "-Infinity"
-  else if v <> v
+  else if Poly.(v <> v)
   then "NaN"
   (* [1/-0] = -inf seems to be the only way to detect -0 in JavaScript *)
-  else if v = 0. && (1. /. v) = neg_infinity
+  else if Poly.(v = 0.) && Poly.((1. /. v) = neg_infinity)
   then "-0"
   else
     let vint = int_of_float v in
     (* compiler 1000 into 1e3 *)
-    if float_of_int vint = v
+    if Poly.(float_of_int vint = v)
     then
       let rec div n i =
         if n <> 0 && n mod 10 = 0
@@ -230,11 +320,11 @@ let string_of_number v =
       div vint 0
     else
       let s1 = Printf.sprintf "%.12g" v in
-      if v = float_of_string s1
+      if Poly.(v = float_of_string s1)
       then s1
       else
         let s2 = Printf.sprintf "%.15g" v in
-        if v = float_of_string s2
+        if Poly.(v = float_of_string s2)
         then s2
         else  Printf.sprintf "%.18g" v
 
@@ -253,7 +343,30 @@ let compare_ident t1 t2 =
 
 exception Not_an_ident
 
-let ident ?(loc = N) ?var name = S {name; var; loc}
+let is_ident =
+  let l =
+    Array.init 256 ~f:(fun i ->
+        let c = Char.chr i in
+        match c with
+        | 'a' .. 'z' | 'A' .. 'Z' | '_' | '$' -> 1
+        | '0' .. '9' -> 2
+        | _ -> 0)
+  in
+  fun s ->
+    (not (StringSet.mem s Reserved.keyword))
+    &&
+    try
+      for i = 0 to String.length s - 1 do
+        let code = l.(Char.code s.[i]) in
+        if i = 0
+        then (if code <> 1 then raise Not_an_ident)
+        else if code < 1
+        then raise Not_an_ident
+      done;
+      true
+    with Not_an_ident -> false
+
+let ident ?(loc = N) ?var name = S { name; var; loc }
 
 module IdentSet = Set.Make (struct
   type t = ident

@@ -16,7 +16,7 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-*)
+ *)
 (** File API
   @see <https://developer.mozilla.org/en-US/docs/Web/API/File> the documentation of the API. *)
 
@@ -35,7 +35,7 @@ class type blob =
   end
 
 type 'a make_blob =
-  ?contentType:string -> ?endings:[`Transparent | `Native] -> 'a -> blob t
+  ?contentType:string -> ?endings:[ `Transparent | `Native ] -> 'a -> blob t
 
 val blob_from_string : string make_blob
 
@@ -44,7 +44,8 @@ val blob_from_any :
   | `arrayBuffer of Typed_array.arrayBuffer t
   | `arrayBufferView of Typed_array.arrayBufferView t
   | `string of string
-  | `js_string of js_string t ]
+  | `js_string of js_string t
+  ]
   list
   make_blob
 
@@ -169,7 +170,7 @@ val filename : file t -> js_string t
 
 val fileReader : fileReader t constr
 
-(* be carefull, this might not be implemented in all browser.
+(* be careful, this might not be implemented in all browser.
    To check availability, use [Js.Optdef.to_option (Js.def fileReader)] *)
 
 val addEventListener :

@@ -17,7 +17,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-open Stdlib
+open! Stdlib
 
 module Flag = struct
   let optims = ref []
@@ -82,9 +82,10 @@ module Flag = struct
 
   let safe_string = o ~name:"safestring" ~default:true
 
+  let use_js_string = o ~name:"use-js-string" ~default:false
+
   let check_magic = o ~name:"check-magic-number" ~default:true
 
-  (* this does not optimize properly *)
   let compact_vardecl = o ~name:"vardecl" ~default:false
 
   let simplify_ifdecl = o ~name:"simplify_ifdecl" ~default:true
@@ -130,7 +131,7 @@ module Param = struct
   let constant_max_depth =
     p
       ~name:"cst_depth"
-      ~desc:"set the maximum depth of generated litteral JavaScript values"
+      ~desc:"set the maximum depth of generated literal JavaScript values"
       (int 10)
 
   type tc =
@@ -141,11 +142,12 @@ module Param = struct
 
   let tc_default = TcTrampoline
 
-  let _tc_all = tc_default :: List.filter [TcNone; TcTrampoline] ~f:(( <> ) tc_default)
+  let _tc_all =
+    tc_default :: List.filter [ TcNone; TcTrampoline ] ~f:(Poly.( <> ) tc_default)
 
   let tailcall_optim =
     p
       ~name:"tc"
       ~desc:"Set tailcall optimisation"
-      (enum ["trampoline", TcTrampoline; (* default *) "none", TcNone])
+      (enum [ "trampoline", TcTrampoline; (* default *) "none", TcNone ])
 end

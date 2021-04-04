@@ -29,11 +29,15 @@ function jsoo_floor_log2(x) {
 }
 
 //Provides: caml_int64_bits_of_float const
-//Requires: jsoo_floor_log2
+//Requires: jsoo_floor_log2, caml_int64_create_lo_mi_hi
 function caml_int64_bits_of_float (x) {
   if (!isFinite(x)) {
-    if (isNaN(x)) return [255, 1, 0, 0x7ff0];
-    return (x > 0)?[255,0,0,0x7ff0]:[255,0,0,0xfff0];
+    if (isNaN(x))
+      return caml_int64_create_lo_mi_hi(1, 0, 0x7ff0);
+    if (x > 0)
+      return caml_int64_create_lo_mi_hi(0, 0, 0x7ff0)
+    else
+      return caml_int64_create_lo_mi_hi(0, 0, 0xfff0)
   }
   var sign = (x==0 && 1/x == -Infinity)?0x8000:(x>=0)?0:0x8000;
   if (sign) x = -x;
@@ -57,7 +61,7 @@ function caml_int64_bits_of_float (x) {
   x = (x - r2) * k;
   var r1 = x|0;
   r3 = (r3 &0xf) | sign | exp << 4;
-  return [255, r1, r2, r3];
+  return caml_int64_create_lo_mi_hi(r1, r2, r3);
 }
 
 //Provides: caml_int32_bits_of_float const
@@ -73,11 +77,11 @@ function caml_int32_bits_of_float (x) {
 //notation 0x<mantissa in hex>p<exponent> from ISO C99.
 //https://github.com/dankogai/js-hexfloat/blob/master/hexfloat.js
 //Provides: caml_hexstring_of_float const
-//Requires: caml_js_to_string, caml_str_repeat
+//Requires: caml_string_of_jsstring, caml_str_repeat
 function caml_hexstring_of_float (x, prec, style) {
   if (!isFinite(x)) {
-    if (isNaN(x)) return caml_js_to_string("nan");
-    return caml_js_to_string ((x > 0)?"infinity":"-infinity");
+    if (isNaN(x)) return caml_string_of_jsstring("nan");
+    return caml_string_of_jsstring ((x > 0)?"infinity":"-infinity");
   }
   var sign = (x==0 && 1/x == -Infinity)?1:(x>=0)?0:1;
   if(sign) x = -x;
@@ -117,27 +121,55 @@ function caml_hexstring_of_float (x, prec, style) {
         x_str = x_str.substr(0,size);
     }
   }
-  return caml_js_to_string (sign_str + '0x' + x_str + 'p' + exp_sign + exp.toString(10));
+  return caml_string_of_jsstring (sign_str + '0x' + x_str + 'p' + exp_sign + exp.toString(10));
 }
 
 //Provides: caml_int64_float_of_bits const
 function caml_int64_float_of_bits (x) {
-  var exp = (x[3] & 0x7fff) >> 4;
+  var lo = x.lo;
+  var mi = x.mi;
+  var hi = x.hi;
+  var exp = (hi & 0x7fff) >> 4;
   if (exp == 2047) {
-    if ((x[1]|x[2]|(x[3]&0xf)) == 0)
-      return (x[3] & 0x8000)?(-Infinity):Infinity;
+    if ((lo|mi|(hi&0xf)) == 0)
+      return (hi & 0x8000)?(-Infinity):Infinity;
     else
       return NaN;
   }
   var k = Math.pow(2,-24);
-  var res = (x[1]*k+x[2])*k+(x[3]&0xf);
+  var res = (lo*k+mi)*k+(hi&0xf);
   if (exp > 0) {
     res += 16;
     res *= Math.pow(2,exp-1027);
   } else
     res *= Math.pow(2,-1026);
-  if (x[3] & 0x8000) res = - res;
+  if (hi & 0x8000) res = - res;
   return res;
+}
+
+//Provides: caml_nextafter_float const
+//Requires: caml_int64_float_of_bits, caml_int64_bits_of_float, caml_int64_add, caml_int64_sub,caml_int64_of_int32
+function caml_nextafter_float (x,y) {
+  if(isNaN(x) || isNaN(y)) return NaN;
+  if(x==y) return y;
+  if(x==0){
+    if(y < 0)
+      return -Math.pow(2, -1074)
+    else
+      return Math.pow(2, -1074)
+  }
+  var bits = caml_int64_bits_of_float(x);
+  var one = caml_int64_of_int32(1);
+  if ((x<y) == (x>0))
+    bits = caml_int64_add(bits, one)
+  else
+    bits = caml_int64_sub(bits, one)
+  return caml_int64_float_of_bits(bits);
+}
+
+//Provides: caml_trunc_float
+function caml_trunc_float(x){
+  return Math.trunc(x);
 }
 
 //Provides: caml_int32_float_of_bits const
@@ -194,9 +226,16 @@ function caml_frexp_float (x) {
   if ((x == 0) || !isFinite(x)) return [0, x, 0];
   var neg = x < 0;
   if (neg) x = - x;
-  var exp = jsoo_floor_log2(x) + 1;
+  var exp = Math.max(-1023, jsoo_floor_log2(x) + 1);
   x *= Math.pow(2,-exp);
-  if (x < 0.5) { x *= 2; exp -= 1; }
+  while (x < 0.5) {
+    x *= 2;
+    exp--;
+  }
+  while (x >= 1) {
+    x *= 0.5;
+    exp++;
+  }
   if (neg) x = - x;
   return [0, x, exp];
 }
@@ -216,6 +255,12 @@ function caml_copysign_float (x, y) {
   if (y == 0) y = 1 / y;
   x = Math.abs(x);
   return (y < 0)?(-x):x;
+}
+
+//Provides: caml_signbit_float const
+function caml_signbit_float(x) {
+  if (x == 0) x = 1 / x;
+  return (x < 0)?1:0;
 }
 
 //Provides: caml_expm1_float const
@@ -248,4 +293,97 @@ function caml_sinh_float (x) { return (Math.exp(x) - Math.exp(-x)) / 2; }
 function caml_tanh_float (x) {
   var y = Math.exp(x), z = Math.exp(-x);
   return (y - z) / (y + z);
+}
+
+//Provides: caml_round_float
+function caml_round_float (x) { return Math.round(x); }
+
+//Provides: caml_format_float const
+//Requires: caml_parse_format, caml_finish_formatting
+function caml_format_float (fmt, x) {
+  function toFixed(x,dp) {
+    if (Math.abs(x) < 1.0) {
+      return x.toFixed(dp);
+    } else {
+      var e = parseInt(x.toString().split('+')[1]);
+      if (e > 20) {
+        e -= 20;
+        x /= Math.pow(10,e);
+        x += (new Array(e+1)).join('0');
+        if(dp > 0) {
+          x = x + '.' + (new Array(dp+1)).join('0');
+        }
+        return x;
+      }
+      else return x.toFixed(dp)
+    }
+  }
+  var s, f = caml_parse_format(fmt);
+  var prec = (f.prec < 0)?6:f.prec;
+  if (x < 0 || (x == 0 && 1/x == -Infinity)) { f.sign = -1; x = -x; }
+  if (isNaN(x)) { s = "nan"; f.filler = ' '; }
+  else if (!isFinite(x)) { s = "inf"; f.filler = ' '; }
+  else
+    switch (f.conv) {
+    case 'e':
+      var s = x.toExponential(prec);
+      // exponent should be at least two digits
+      var i = s.length;
+      if (s.charAt(i - 3) == 'e')
+        s = s.slice (0, i - 1) + '0' + s.slice (i - 1);
+      break;
+    case 'f':
+      s = toFixed(x, prec); break;
+    case 'g':
+      prec = prec?prec:1;
+      s = x.toExponential(prec - 1);
+      var j = s.indexOf('e');
+      var exp = +s.slice(j + 1);
+      if (exp < -4 || x >= 1e21 || x.toFixed(0).length > prec) {
+        // remove trailing zeroes
+        var i = j - 1; while (s.charAt(i) == '0') i--;
+        if (s.charAt(i) == '.') i--;
+        s = s.slice(0, i + 1) + s.slice(j);
+        i = s.length;
+        if (s.charAt(i - 3) == 'e')
+          s = s.slice (0, i - 1) + '0' + s.slice (i - 1);
+        break;
+      } else {
+        var p = prec;
+        if (exp < 0) { p -= exp + 1; s = x.toFixed(p); }
+        else while (s = x.toFixed(p), s.length > prec + 1) p--;
+        if (p) {
+          // remove trailing zeroes
+          var i = s.length - 1; while (s.charAt(i) == '0') i--;
+          if (s.charAt(i) == '.') i--;
+          s = s.slice(0, i + 1);
+        }
+      }
+      break;
+    }
+  return caml_finish_formatting(f, s);
+}
+
+//Provides: caml_float_of_string (const)
+//Requires: caml_failwith, caml_jsbytes_of_string
+function caml_float_of_string(s) {
+  var res;
+  s = caml_jsbytes_of_string(s)
+  res = +s;
+  if ((s.length > 0) && (res === res)) return res;
+  s = s.replace(/_/g,"");
+  res = +s;
+  if (((s.length > 0) && (res === res)) || /^[+-]?nan$/i.test(s)) return res;
+  var m = /^ *([+-]?)0x([0-9a-f]+)\.?([0-9a-f]*)p([+-]?[0-9]+)/i.exec(s);
+  //          1        2             3           4
+  if(m){
+    var m3 = m[3].replace(/0+$/,'');
+    var mantissa = parseInt(m[1] + m[2] + m3, 16);
+    var exponent = (m[4]|0) - 4*m3.length;
+    res = mantissa * Math.pow(2, exponent);
+    return res;
+  }
+  if(/^\+?inf(inity)?$/i.test(s)) return Infinity;
+  if(/^-inf(inity)?$/i.test(s)) return -Infinity;
+  caml_failwith("float_of_string");
 }

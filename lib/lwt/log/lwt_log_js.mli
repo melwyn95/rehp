@@ -19,11 +19,11 @@
 
 include
   module type of Lwt_log_core
-  with type level = Lwt_log_core.level
-   and type logger = Lwt_log_core.logger
-   and type section = Lwt_log_core.section
-   and type template = Lwt_log_core.template
-   and module Section = Lwt_log_core.Section
+    with type level = Lwt_log_core.level
+     and type logger = Lwt_log_core.logger
+     and type section = Lwt_log_core.section
+     and type template = Lwt_log_core.template
+     and module Section = Lwt_log_core.Section
 
 (** Lwt logger for js_of_ocaml *)
 
@@ -95,7 +95,7 @@ val ign_log_f :
 (** The following functions are the same as {!log} except that their
     name determines which level is used.
 
-    For example {!info msg} is the same as {!log ~level:Info msg}.
+    For example [info msg] is the same as [log ~level:Info msg].
 *)
 
 val debug :

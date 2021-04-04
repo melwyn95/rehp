@@ -17,40 +17,56 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
-open Stdlib
+open! Stdlib
+
 let aliases = Hashtbl.create 17
 
 let rec resolve nm = try resolve (Hashtbl.find aliases nm) with Not_found -> nm
 
 (****)
 
-type kind = [ `Pure | `Mutable | `Mutator ]
-type kind_arg = [`Shallow_const | `Object_literal | `Const | `Mutable]
-type t = [
-  | `Requires of Parse_info.t option * string list
+type kind =
+  [ `Pure
+  | `Mutable
+  | `Mutator
+  ]
+
+type kind_arg =
+  [ `Shallow_const
+  | `Object_literal
+  | `Const
+  | `Mutable
+  ]
+
+type condition =
+  [ `If of Parse_info.t option * string
+  | `Ifnot of Parse_info.t option * string
+  ]
+
+type t =
+  [ `Requires of Parse_info.t option * string list
   | `Provides of Parse_info.t option * string * kind * kind_arg list option
   | `Version of Parse_info.t option * ((int -> int -> bool) * string) list
   | `Weakdef of Parse_info.t option
-]
+  | condition
+  ]
 
 let kinds = Hashtbl.create 37
-let kind_args_tbl = Hashtbl.create 37
-let arities = Hashtbl.create 37
 
+let kind_args_tbl = Hashtbl.create 37
+
+let arities = Hashtbl.create 37
 
 let kind nm = try Hashtbl.find kinds (resolve nm) with Not_found -> `Mutator
 
-let kind_args nm = try Some (Hashtbl.find kind_args_tbl (resolve nm)) with Not_found -> None
+let kind_args nm =
+  try Some (Hashtbl.find kind_args_tbl (resolve nm)) with Not_found -> None
 
-let registered_arity nm = Hashtbl.find arities (resolve nm)
+let arity nm = Hashtbl.find arities (resolve nm)
 
-(* The arity registered explicitly - externs still have discoverable arity
-   even if not registered, as indicated by their type *)
-let has_registered_arity nm a =
-  try Hashtbl.find arities (resolve nm) = a
-  with Not_found -> false
+let has_arity nm a = try Hashtbl.find arities (resolve nm) = a with Not_found -> false
 
-let is_pure nm = kind nm <> `Mutator
+let is_pure nm = Poly.(kind nm <> `Mutator)
 
 (* Returns whether or not the primitive has been registered:
    Registering happens when loading files in js_of_ocaml.ml as well
@@ -70,15 +86,18 @@ let get_external () = !externals
 
 let register p k kargs arity =
   add_external p;
-  (match arity with Some a -> Hashtbl.add arities p a | _ -> ());
-  (match kargs with Some k -> Hashtbl.add kind_args_tbl p k | _ -> ());
+  (match arity with
+  | Some a -> Hashtbl.add arities p a
+  | _ -> ());
+  (match kargs with
+  | Some k -> Hashtbl.add kind_args_tbl p k
+  | _ -> ());
   Hashtbl.add kinds p k
 
 let alias nm nm' =
   add_external nm';
   add_external nm;
   Hashtbl.add aliases nm nm'
-
 
 let named_values = ref StringSet.empty
 

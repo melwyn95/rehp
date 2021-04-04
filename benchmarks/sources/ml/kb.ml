@@ -29,13 +29,17 @@ let rec union l1 l2 =
   | [] -> l2
   | a :: r -> if List.mem a l2 then union r l2 else a :: union r l2
 
-let rec vars = function Var n -> [n] | Term (_, l) -> vars_of_list l
+let rec vars = function
+  | Var n -> [ n ]
+  | Term (_, l) -> vars_of_list l
 
-and vars_of_list = function [] -> [] | t :: r -> union (vars t) (vars_of_list r)
+and vars_of_list = function
+  | [] -> []
+  | t :: r -> union (vars t) (vars_of_list r)
 
 let rec substitute subst = function
   | Term (oper, sons) -> Term (oper, List.map (substitute subst) sons)
-  | Var n as t -> ( try List.assoc n subst with Not_found -> t )
+  | Var n as t -> ( try List.assoc n subst with Not_found -> t)
 
 (* Term replacement: replace M u N is M[u<-N]. *)
 
@@ -83,8 +87,8 @@ let rec unify term1 term2 =
       then []
       else if occurs n1 term2
       then failwith "unify"
-      else [n1, term2]
-  | term1, Var n2 -> if occurs n2 term1 then failwith "unify" else [n2, term1]
+      else [ n1, term2 ]
+  | term1, Var n2 -> if occurs n2 term1 then failwith "unify" else [ n2, term1 ]
   | Term (op1, sons1), Term (op2, sons2) ->
       if op1 = op2
       then
@@ -99,7 +103,7 @@ let rec unify term1 term2 =
   obtained by parsing. We give arbitrary names v1,v2,... to their variables.
 *)
 
-let infixes = ["+"; "*"]
+let infixes = [ "+"; "*" ]
 
 let pretty_term _ = ()
 
@@ -125,15 +129,22 @@ type rule =
   { number : int
   ; numvars : int
   ; lhs : term
-  ; rhs : term }
+  ; rhs : term
+  }
 
 (* standardizes an equation so its variables are 1,2,... *)
 
 let mk_rule num m n =
   let all_vars = union (vars m) (vars n) in
   let counter = ref 0 in
-  let subst = List.map (fun v -> incr counter; v, Var !counter) (List.rev all_vars) in
-  {number = num; numvars = !counter; lhs = substitute subst m; rhs = substitute subst n}
+  let subst =
+    List.map
+      (fun v ->
+        incr counter;
+        v, Var !counter)
+      (List.rev all_vars)
+  in
+  { number = num; numvars = !counter; lhs = substitute subst m; rhs = substitute subst n }
 
 (* checks that rules are numbered in sequence and returns their number *)
 
@@ -142,7 +153,7 @@ let check_rules rules =
   List.iter
     (fun r ->
       incr counter;
-      if r.number <> !counter then failwith "Rule numbers not in sequence" )
+      if r.number <> !counter then failwith "Rule numbers not in sequence")
     rules;
   !counter
 
@@ -172,28 +183,32 @@ let can_match l m =
 
 let rec reducible l m =
   can_match l m
-  || match m with Term (_, sons) -> List.exists (reducible l) sons | _ -> false
+  ||
+  match m with
+  | Term (_, sons) -> List.exists (reducible l) sons
+  | _ -> false
 
 (* Top-level rewriting with multiple rules. *)
 
 let rec mreduce rules m =
   match rules with
   | [] -> failwith "mreduce"
-  | rule :: rest -> ( try reduce rule.lhs m rule.rhs with Failure _ -> mreduce rest m )
+  | rule :: rest -> ( try reduce rule.lhs m rule.rhs with Failure _ -> mreduce rest m)
 
 (* One step of rewriting in leftmost-outermost strategy,
    with multiple rules. Fails if no redex is found *)
 
 let rec mrewrite1 rules m =
-  try mreduce rules m with Failure _ -> (
+  try mreduce rules m
+  with Failure _ -> (
     match m with
     | Var _ -> failwith "mrewrite1"
-    | Term (f, sons) -> Term (f, mrewrite1_sons rules sons) )
+    | Term (f, sons) -> Term (f, mrewrite1_sons rules sons))
 
 and mrewrite1_sons rules = function
   | [] -> failwith "mrewrite1"
   | son :: rest -> (
-    try mrewrite1 rules son :: rest with Failure _ -> son :: mrewrite1_sons rules rest )
+      try mrewrite1 rules son :: rest with Failure _ -> son :: mrewrite1_sons rules rest)
 
 (* Iterating rewrite1. Returns a normal form. May loop forever *)
 
@@ -221,11 +236,20 @@ type ordering =
   | Equal
   | NotGE
 
-let ge_ord order pair = match order pair with NotGE -> false | _ -> true
+let ge_ord order pair =
+  match order pair with
+  | NotGE -> false
+  | _ -> true
 
-and gt_ord order pair = match order pair with Greater -> true | _ -> false
+and gt_ord order pair =
+  match order pair with
+  | Greater -> true
+  | _ -> false
 
-and eq_ord order pair = match order pair with Equal -> true | _ -> false
+and eq_ord order pair =
+  match order pair with
+  | Equal -> true
+  | _ -> false
 
 let rec rem_eq equiv x = function
   | [] -> failwith "rem_eq"
@@ -235,9 +259,10 @@ let diff_eq equiv (x, y) =
   let rec diffrec = function
     | ([], _) as p -> p
     | h :: t, y -> (
-      try diffrec (t, rem_eq equiv h y) with Failure _ ->
-        let x', y' = diffrec (t, y) in
-        h :: x', y' )
+        try diffrec (t, rem_eq equiv h y)
+        with Failure _ ->
+          let x', y' = diffrec (t, y) in
+          h :: x', y')
   in
   if List.length x > List.length y then diffrec (y, x) else diffrec (x, y)
 
@@ -245,12 +270,12 @@ let diff_eq equiv (x, y) =
 
 let mult_ext order = function
   | Term (_, sons1), Term (_, sons2) -> (
-    match diff_eq (eq_ord order) (sons1, sons2) with
-    | [], [] -> Equal
-    | l1, l2 ->
-        if List.for_all (fun n -> List.exists (fun m -> gt_ord order (m, n)) l1) l2
-        then Greater
-        else NotGE )
+      match diff_eq (eq_ord order) (sons1, sons2) with
+      | [], [] -> Equal
+      | l1, l2 ->
+          if List.for_all (fun n -> List.exists (fun m -> gt_ord order (m, n)) l1) l2
+          then Greater
+          else NotGE)
   | _ -> failwith "mult_ext"
 
 (* Lexicographic extension of order *)
@@ -262,13 +287,15 @@ let lex_ext order = function
         | [], _ -> NotGE
         | _, [] -> Greater
         | x1 :: l1, x2 :: l2 -> (
-          match order (x1, x2) with
-          | Greater ->
-              if List.for_all (fun n' -> gt_ord order (m, n')) l2 then Greater else NotGE
-          | Equal -> lexrec (l1, l2)
-          | NotGE ->
-              if List.exists (fun m' -> ge_ord order (m', n)) l1 then Greater else NotGE
-          )
+            match order (x1, x2) with
+            | Greater ->
+                if List.for_all (fun n' -> gt_ord order (m, n')) l2
+                then Greater
+                else NotGE
+            | Equal -> lexrec (l1, l2)
+            | NotGE ->
+                if List.exists (fun m' -> ge_ord order (m', n)) l1 then Greater else NotGE
+            )
       in
       lexrec (sons1, sons2)
   | _ -> failwith "lex_ext"
@@ -283,19 +310,19 @@ let rpo op_order ext =
       match m with
       | Var _ -> NotGE
       | Term (op1, sons1) -> (
-        match n with
-        | Var vn -> if occurs vn m then Greater else NotGE
-        | Term (op2, sons2) -> (
-          match op_order op1 op2 with
-          | Greater ->
-              if List.for_all (fun n' -> gt_ord rporec (m, n')) sons2
-              then Greater
-              else NotGE
-          | Equal -> ext rporec (m, n)
-          | NotGE ->
-              if List.exists (fun m' -> ge_ord rporec (m', n)) sons1
-              then Greater
-              else NotGE ) )
+          match n with
+          | Var vn -> if occurs vn m then Greater else NotGE
+          | Term (op2, sons2) -> (
+              match op_order op1 op2 with
+              | Greater ->
+                  if List.for_all (fun n' -> gt_ord rporec (m, n')) sons2
+                  then Greater
+                  else NotGE
+              | Equal -> ext rporec (m, n)
+              | NotGE ->
+                  if List.exists (fun m' -> ge_ord rporec (m', n)) sons1
+                  then Greater
+                  else NotGE))
   in
   rporec
 
@@ -327,7 +354,7 @@ let rec super m = function
             @ collate (n + 1) rest
       in
       let insides = collate 1 sons in
-      try ([], unify m n) :: insides with Failure _ -> insides )
+      try ([], unify m n) :: insides with Failure _ -> insides)
   | _ -> []
 
 (* Ex :
@@ -363,8 +390,7 @@ let strict_critical_pairs (l1, r1) (l2, r2) =
   List.map mk_pair (super_strict l1 l2)
 
 (* All critical pairs of eq1 with eq2 *)
-let mutual_critical_pairs eq1 eq2 =
-  strict_critical_pairs eq1 eq2 @ critical_pairs eq2 eq1
+let mutual_critical_pairs eq1 eq2 = strict_critical_pairs eq1 eq2 @ critical_pairs eq2 eq1
 
 (* Renaming of variables *)
 
@@ -378,11 +404,17 @@ let rename n (t1, t2) =
 (************************ Completion ******************************)
 
 let deletion_message rule =
-  print_string "Rule "; print_int rule.number; print_string " deleted"; print_newline ()
+  print_string "Rule ";
+  print_int rule.number;
+  print_string " deleted";
+  print_newline ()
 
 (* Generate failure message *)
 let non_orientable (m, n) =
-  pretty_term m; print_string " = "; pretty_term n; print_newline ()
+  pretty_term m;
+  print_string " = ";
+  pretty_term n;
+  print_newline ()
 
 let rec partition p = function
   | [] -> [], []
@@ -399,13 +431,15 @@ let rec get_rule n = function
 let kb_completion greater =
   let rec kbrec j rules =
     let rec process failures (k, l) eqs =
-      (****
-     print_string "***kb_completion "; print_int j; print_newline();
-     pretty_rules rules;
-     List.iter non_orientable failures;
-     print_int k; print_string " "; print_int l; print_newline();
-     List.iter non_orientable eqs;
-***)
+      (*
+        {[
+          print_string "***kb_completion "; print_int j; print_newline();
+          pretty_rules rules;
+          List.iter non_orientable failures;
+          print_int k; print_string " "; print_int l; print_newline();
+          List.iter non_orientable eqs;
+        ]}
+      *)
       match eqs with
       | [] -> (
           if k < l
@@ -419,7 +453,7 @@ let kb_completion greater =
                 print_string "Non-orientable equations :";
                 print_newline ();
                 List.iter non_orientable failures;
-                failwith "kb_completion" )
+                failwith "kb_completion")
       | (m, n) :: eqs ->
           let m' = mrewrite_all rules m
           and n' = mrewrite_all rules n
@@ -436,9 +470,10 @@ let kb_completion greater =
             let eqs' = List.map (fun rule -> rule.lhs, rule.rhs) redl in
             kbrec (j + 1) (new_rule :: irreds) [] (k, l) (eqs @ eqs' @ failures)
           in
-          (***
-        print_string "--- Considering "; non_orientable (m', n');
-***)
+          (* {[
+                print_string "--- Considering "; non_orientable (m', n');
+             ]}
+          *)
           if m' = n'
           then process failures (k, l) eqs
           else if greater (m', n')
@@ -447,10 +482,11 @@ let kb_completion greater =
           then enter_rule (n', m')
           else process ((m', n') :: failures) (k, l) eqs
     and next_criticals failures (k, l) =
-      (****
-    print_string "***next_criticals ";
-    print_int k; print_string " "; print_int l ; print_newline();
-****)
+      (* {[
+            print_string "***next_criticals ";
+            print_int k; print_string " "; print_int l ; print_newline();
+         ]}
+      *)
       try
         let rl = get_rule l rules in
         let el = rl.lhs, rl.rhs in
@@ -506,39 +542,48 @@ let group_rules = [
 ****)
 
 let geom_rules =
-  [ {number = 1; numvars = 1; lhs = Term ("*", [Term ("U", []); Var 1]); rhs = Var 1}
+  [ { number = 1; numvars = 1; lhs = Term ("*", [ Term ("U", []); Var 1 ]); rhs = Var 1 }
   ; { number = 2
     ; numvars = 1
-    ; lhs = Term ("*", [Term ("I", [Var 1]); Var 1])
-    ; rhs = Term ("U", []) }
+    ; lhs = Term ("*", [ Term ("I", [ Var 1 ]); Var 1 ])
+    ; rhs = Term ("U", [])
+    }
   ; { number = 3
     ; numvars = 3
-    ; lhs = Term ("*", [Term ("*", [Var 1; Var 2]); Var 3])
-    ; rhs = Term ("*", [Var 1; Term ("*", [Var 2; Var 3])]) }
+    ; lhs = Term ("*", [ Term ("*", [ Var 1; Var 2 ]); Var 3 ])
+    ; rhs = Term ("*", [ Var 1; Term ("*", [ Var 2; Var 3 ]) ])
+    }
   ; { number = 4
     ; numvars = 0
-    ; lhs = Term ("*", [Term ("A", []); Term ("B", [])])
-    ; rhs = Term ("*", [Term ("B", []); Term ("A", [])]) }
+    ; lhs = Term ("*", [ Term ("A", []); Term ("B", []) ])
+    ; rhs = Term ("*", [ Term ("B", []); Term ("A", []) ])
+    }
   ; { number = 5
     ; numvars = 0
-    ; lhs = Term ("*", [Term ("C", []); Term ("C", [])])
-    ; rhs = Term ("U", []) }
+    ; lhs = Term ("*", [ Term ("C", []); Term ("C", []) ])
+    ; rhs = Term ("U", [])
+    }
   ; { number = 6
     ; numvars = 0
     ; lhs =
         Term
           ( "*"
-          , [Term ("C", []); Term ("*", [Term ("A", []); Term ("I", [Term ("C", [])])])]
-          )
-    ; rhs = Term ("I", [Term ("A", [])]) }
+          , [ Term ("C", [])
+            ; Term ("*", [ Term ("A", []); Term ("I", [ Term ("C", []) ]) ])
+            ] )
+    ; rhs = Term ("I", [ Term ("A", []) ])
+    }
   ; { number = 7
     ; numvars = 0
     ; lhs =
         Term
           ( "*"
-          , [Term ("C", []); Term ("*", [Term ("B", []); Term ("I", [Term ("C", [])])])]
-          )
-    ; rhs = Term ("B", []) } ]
+          , [ Term ("C", [])
+            ; Term ("*", [ Term ("B", []); Term ("I", [ Term ("C", []) ]) ])
+            ] )
+    ; rhs = Term ("B", [])
+    }
+  ]
 
 let group_rank = function
   | "U" -> 0
@@ -555,7 +600,10 @@ let group_precedence op1 op2 =
 
 let group_order = rpo group_precedence lex_ext
 
-let greater pair = match group_order pair with Greater -> true | _ -> false
+let greater pair =
+  match group_order pair with
+  | Greater -> true
+  | _ -> false
 
 let _ =
   for _ = 1 to 20 do

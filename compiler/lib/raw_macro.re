@@ -389,7 +389,7 @@ let raiseMalformedPrim = (specificError, (primTag, prim_name), macroData) => {
     "<@"
     ++ primTag
     ++ ">"
-    ++ (primTag != prim_name ? "(sugar for prim " ++ prim_name ++ ")" : "");
+    ++ (Poly.(primTag != prim_name) ? "(sugar for prim " ++ prim_name ++ ")" : "");
   let msg =
     Printf.sprintf(
       {|%s

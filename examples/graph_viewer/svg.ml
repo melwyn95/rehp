@@ -45,11 +45,11 @@ let perform_draw ctx fill stroke =
   (*
   print_extent ctx fill stroke;
 *)
-  ( match fill with
+  (match fill with
   | Some (r, g, b) ->
       Cairo.set_source_rgb ctx r g b;
       if stroke <> None then Cairo.fill_preserve ctx else Cairo.fill ctx
-  | None -> () );
+  | None -> ());
   match stroke with
   | Some (r, g, b) ->
       Cairo.set_source_rgb ctx r g b;
@@ -65,7 +65,7 @@ let draw_element ctx e =
         (fun c ->
           match c with
           | Move_to (x, y) -> Cairo.move_to ctx x y
-          | Curve_to (x1, y1, x2, y2, x3, y3) -> Cairo.curve_to ctx x1 y1 x2 y2 x3 y3 )
+          | Curve_to (x1, y1, x2, y2, x3, y3) -> Cairo.curve_to ctx x1 y1 x2 y2 x3 y3)
         cmd;
       perform_draw ctx fill stroke
   | Ellipse (cx, cy, rx, ry, fill, stroke) ->
@@ -76,13 +76,13 @@ let draw_element ctx e =
       Cairo.restore ctx;
       perform_draw ctx fill stroke
   | Polygon (points, fill, stroke) -> (
-    match points with
-    | (x, y) :: rem ->
-        Cairo.move_to ctx x y;
-        List.iter (fun (x, y) -> Cairo.line_to ctx x y) rem;
-        Cairo.close_path ctx;
-        perform_draw ctx fill stroke
-    | [] -> () )
+      match points with
+      | (x, y) :: rem ->
+          Cairo.move_to ctx x y;
+          List.iter (fun (x, y) -> Cairo.line_to ctx x y) rem;
+          Cairo.close_path ctx;
+          perform_draw ctx fill stroke
+      | [] -> ())
   | Text (x, y, txt, font, font_size, fill, stroke) ->
       let ext = Cairo.text_extents ctx txt in
       Cairo.move_to ctx (x -. ext.Cairo.x_bearing -. (ext.Cairo.text_width /. 2.)) y;
@@ -102,7 +102,7 @@ let compute_extent ctx e =
         (fun c ->
           match c with
           | Move_to (x, y) -> Cairo.move_to ctx x y
-          | Curve_to (x1, y1, x2, y2, x3, y3) -> Cairo.curve_to ctx x1 y1 x2 y2 x3 y3 )
+          | Curve_to (x1, y1, x2, y2, x3, y3) -> Cairo.curve_to ctx x1 y1 x2 y2 x3 y3)
         cmd;
       path_extent ctx fill stroke
   | Ellipse (cx, cy, rx, ry, fill, stroke) ->
@@ -113,13 +113,13 @@ let compute_extent ctx e =
       Cairo.restore ctx;
       path_extent ctx fill stroke
   | Polygon (points, fill, stroke) -> (
-    match points with
-    | (x, y) :: rem ->
-        Cairo.move_to ctx x y;
-        List.iter (fun (x, y) -> Cairo.line_to ctx x y) rem;
-        Cairo.close_path ctx;
-        path_extent ctx fill stroke
-    | [] -> assert false )
+      match points with
+      | (x, y) :: rem ->
+          Cairo.move_to ctx x y;
+          List.iter (fun (x, y) -> Cairo.line_to ctx x y) rem;
+          Cairo.close_path ctx;
+          path_extent ctx fill stroke
+      | [] -> assert false)
   | Text (x, y, txt, font, font_size, fill, stroke) ->
       let ext = Cairo.text_extents ctx txt in
       ( x -. (ext.Cairo.text_width /. 2.)
@@ -291,7 +291,8 @@ let named_colors =
     ; "white", (255, 255, 255)
     ; "whitesmoke", (245, 245, 245)
     ; "yellow", (255, 255, 0)
-    ; "yellowgreen", (154, 205, 50) ];
+    ; "yellowgreen", (154, 205, 50)
+    ];
   colors
 
 let svg_name nm = "http://www.w3.org/2000/svg", nm
@@ -328,7 +329,9 @@ let push e = stack := e :: !stack
 
 let skip_whitespace i =
   (* XXX Check white-space only *)
-  match Xmlm.peek i with `Data s -> ignore (Xmlm.input i) | _ -> ()
+  match Xmlm.peek i with
+  | `Data s -> ignore (Xmlm.input i)
+  | _ -> ()
 
 let end_tag i =
   let e = Xmlm.input i in
@@ -341,7 +344,12 @@ let rec empty_tag i =
   | _ -> assert false
 
 let rec text_tag i =
-  match Xmlm.input i with `Data s -> empty_tag i; s | `El_end -> "" | _ -> assert false
+  match Xmlm.input i with
+  | `Data s ->
+      empty_tag i;
+      s
+  | `El_end -> ""
+  | _ -> assert false
 
 let comma_wsp = Str.regexp "[\x20\x09\x0D\x0A,]+"
 
@@ -360,9 +368,9 @@ let rec parse_cmds l =
       let args = List.map float_of_string (Str.split comma_wsp args) in
       let rem = parse_cmds rem in
       match cmd, args with
-      | "M", [x; y] -> Move_to (x, y) :: rem
+      | "M", [ x; y ] -> Move_to (x, y) :: rem
       | "C", (_ :: _ as args) -> parse_curve_to args rem
-      | _ -> assert false )
+      | _ -> assert false)
   | [] -> []
   | _ -> assert false
 
@@ -380,9 +388,10 @@ let parse_color c =
     Some (convert c)
   else
     Some
-      ( try Hashtbl.find named_colors c with Not_found ->
-          Format.eprintf "%s@." c;
-          assert false )
+      (try Hashtbl.find named_colors c
+       with Not_found ->
+         Format.eprintf "%s@." c;
+         assert false)
 
 let read_path attrs i =
   let d = List.assoc d_attr attrs in
@@ -391,7 +400,8 @@ let read_path attrs i =
   let fill = parse_color (List.assoc fill_attr attrs) in
   let stroke = parse_color (List.assoc stroke_attr attrs) in
   let e = Path (cmd, fill, stroke) in
-  push e; empty_tag i
+  push e;
+  empty_tag i
 
 let read_ellipse attrs i =
   let cx = float_of_string (List.assoc cx_attr attrs) in
@@ -401,10 +411,14 @@ let read_ellipse attrs i =
   let fill = parse_color (List.assoc fill_attr attrs) in
   let stroke = parse_color (List.assoc stroke_attr attrs) in
   let e = Ellipse (cx, cy, rx, ry, fill, stroke) in
-  push e; empty_tag i
+  push e;
+  empty_tag i
 
 let rec group l =
-  match l with x :: y :: r -> (x, y) :: group r | [] -> [] | _ -> assert false
+  match l with
+  | x :: y :: r -> (x, y) :: group r
+  | [] -> []
+  | _ -> assert false
 
 let read_polygon attrs i =
   let points = List.assoc points_attr attrs in
@@ -412,7 +426,8 @@ let read_polygon attrs i =
   let fill = parse_color (List.assoc fill_attr attrs) in
   let stroke = parse_color (List.assoc stroke_attr attrs) in
   let e = Polygon (points, fill, stroke) in
-  push e; empty_tag i
+  push e;
+  empty_tag i
 
 let read_text attrs i =
   let fill = parse_color (try List.assoc fill_attr attrs with Not_found -> "black") in
@@ -431,26 +446,31 @@ let rec read_element nm attrs i =
   skip_whitespace i;
   match Xmlm.input i with
   | `El_end -> ()
-  | `Data d -> ( match Xmlm.input i with `El_end -> () | _ -> assert false )
+  | `Data d -> (
+      match Xmlm.input i with
+      | `El_end -> ()
+      | _ -> assert false)
   | `El_start ((_, nm'), attrs') ->
       (*
       Format.eprintf "%s" nm';
 List.iter (fun ((_, nm), _) -> Format.eprintf " %s" nm) attrs';
 Format.eprintf "@.";
 *)
-      ( match nm' with
+      (match nm' with
       | "path" -> ignore (read_path attrs' i)
       | "ellipse" -> ignore (read_ellipse attrs' i)
       | "polygon" -> ignore (read_polygon attrs' i)
       | "text" -> ignore (read_text attrs' i)
-      | _ -> read_element nm' attrs' i );
+      | _ -> read_element nm' attrs' i);
       read_element nm attrs i
   | _ -> assert false
 
 let _ =
   let ch = open_in "/tmp/foo.svg" in
   let i = Xmlm.make_input (`Channel ch) in
-  (match Xmlm.input i with `Dtd (Some nm) -> () | _ -> assert false);
+  (match Xmlm.input i with
+  | `Dtd (Some nm) -> ()
+  | _ -> assert false);
   match Xmlm.input i with
   | `El_start ((_, nm), attrs) ->
       assert (nm = "svg");
@@ -468,7 +488,7 @@ let redraw w range ev =
   (*
   let t1 = Unix.gettimeofday () in
 *)
-  let ctx = Cairo_lablgtk.create (w#misc)#window in
+  let ctx = Cairo_lablgtk.create w#misc#window in
   Cairo.save ctx;
   if !bboxes = [] then bboxes := List.map (fun e -> compute_extent ctx e) l;
   Cairo.new_path ctx;
@@ -476,7 +496,7 @@ let redraw w range ev =
   let rect = Gdk.Rectangle.create 0 0 0 0 in
   Gdk.Region.get_clipbox (GdkEvent.Expose.region ev) rect;
   Cairo.clip ctx;
-  let scale = scale *. ((1. /. scale) ** (range#adjustment)#value) in
+  let scale = scale *. ((1. /. scale) ** range#adjustment#value) in
   Cairo.scale ctx scale scale;
   Cairo.translate ctx 364. 22443.;
   let bbox =
@@ -500,8 +520,8 @@ Format.eprintf "%f %f %f %f (%f)@." x1 y1 x2 y2 scale;
   true
 
 let slider_changed (area : GMisc.drawing_area) range () =
-  let scale = scale *. ((1. /. scale) ** (range#adjustment)#value) in
-  (area#misc)#set_size_request
+  let scale = scale *. ((1. /. scale) ** range#adjustment#value) in
+  area#misc#set_size_request
     ~width:(truncate (width *. scale))
     ~height:(truncate (height *. scale))
     ();
@@ -511,7 +531,7 @@ let _ =
   ignore (GMain.Main.init ());
   let initial_size = 600 in
   let w = GWindow.window () in
-  ignore ((w#connect)#destroy GMain.quit);
+  ignore (w#connect#destroy GMain.quit);
   let b = GPack.vbox ~spacing:6 ~border_width:12 ~packing:w#add () in
   (*
   let f = GBin.frame ~shadow_type:`IN
@@ -529,12 +549,12 @@ let _ =
       ~packing:f#add_with_viewport
       ()
   in
-  (area#misc)#set_size_request
+  area#misc#set_size_request
     ~width:(truncate (width *. scale))
     ~height:(truncate (height *. scale))
     ();
   let slider = GRange.scale `HORIZONTAL ~draw_value:false ~packing:b#pack () in
-  (slider#adjustment)#set_bounds ~lower:0. ~upper:1. ~step_incr:0.1 ();
+  slider#adjustment#set_bounds ~lower:0. ~upper:1. ~step_incr:0.1 ();
   (*
   let button = GButton.check_button ~label:"Animate"
       ~packing:b#pack () in
@@ -546,8 +566,8 @@ let _ =
   ignore (button#connect#toggled
             (animate_toggled button slider)) ;
 *)
-  ignore (((area#event)#connect)#expose (redraw area slider));
-  ignore ((slider#connect)#value_changed (slider_changed area slider));
+  ignore (area#event#connect#expose (redraw area slider));
+  ignore (slider#connect#value_changed (slider_changed area slider));
   w#show ();
   GMain.main ()
 

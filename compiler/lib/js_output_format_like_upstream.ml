@@ -29,6 +29,7 @@ XXX Beware automatic semi-colon insertion...
        e ++, e --, continue e, break e, return e, throw e
 *)
 open! Stdlib
+open Poly
 
 let stats = Debug.find "output"
 
@@ -325,14 +326,14 @@ struct
     done;
     PP.string f quote_s
 
-  let rec expression l f e =
+  let rec expression l f (e, s) =
     match e with
     | ERaw segments  ->
       List.iter segments  ~f:(fun itm ->
         match itm with
         | RawText s -> PP.string f s
         (* TODO: Get the right precedence ranking here *)
-        | RawSubstitution e  -> expression 1 f e
+        | RawSubstitution e  -> expression 1 f (e, `Not_spread)
       )
     | EVar v -> ident f v
     | ESeq (e1, e2) ->
@@ -394,7 +395,7 @@ struct
         pp_string f ~utf:Poly.(kind = `Utf8) ~quote s
     | EBool b -> PP.string f (if b then "true" else "false")
     | ENum num ->
-        let s = Javascript.string_of_number num in
+        let s = Javascript.Num.to_string num in
         let need_parent =
           if s.[0] = '-'
             then l > 13  (* Negative numbers may need to be parenthesized. *)
@@ -639,11 +640,11 @@ struct
 
   and property_name f n =
     match n with
-    | PNI s -> PP.string f s
-    | PNS s ->
+    | Javascript.PNI s -> PP.string f s
+    | Javascript.PNS s ->
         let quote = best_string_quote s in
         pp_string f ~utf:true ~quote s
-    | PNN v -> expression 0 f (ENum v)
+    | Javascript.PNN v -> expression 0 f ((ENum v), `Not_spread)
 
   and property_name_and_value_list f l =
     match l with
@@ -1261,8 +1262,10 @@ let program f ?source_map p =
         let urlData =
          match out_file with
          | None ->
-           let data = Source_map_io.to_string sm in
-           "data:application/json;base64," ^ (B64.encode data)
+           let data = Base64.encode (Source_map_io.to_string sm) in
+           match data with
+           | Ok data -> "data:application/json;base64," ^ (data)
+           | _ -> failwith "error: base 64 encode failed"
          | Some out_file ->
            Source_map_io.to_file sm out_file;
            Filename.basename out_file

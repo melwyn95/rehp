@@ -18,8 +18,8 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
-(** This module provides functions to manipulate forms. *)
 open Js
+(** This module provides functions to manipulate forms. *)
 
 class type formData =
   object
@@ -32,16 +32,18 @@ val formData : formData t constr
 
 val formData_form : (Dom_html.formElement t -> formData t) constr
 
-(* be carefull, this might not be implemented in all browser.
+(* be careful, this might not be implemented in all browser.
    To check availability, use [Js.Optdef.to_option (Js.def formData)] *)
 
 type form_elt =
   [ `String of js_string t
-  | `File of File.file t ]
+  | `File of File.file t
+  ]
 
 type form_contents =
   [ `Fields of (string * form_elt) list ref
-  | `FormData of formData t ]
+  | `FormData of formData t
+  ]
 
 val append : form_contents -> string * form_elt -> unit
 

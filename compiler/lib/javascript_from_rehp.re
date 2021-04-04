@@ -10,7 +10,7 @@ open! Stdlib;
 module Expand = {
   let isIntCheck = jsExpr =>
     EBin(EqEqEq, EUn(Typeof, jsExpr), EStr("number", `Bytes));
-  let toInt = jsExpr => EBin(Bor, jsExpr, ENum(0.0));
+  let toInt = jsExpr => EBin(Bor, jsExpr, ENum(Javascript.Num.of_float(0.0)));
   let intToString = jsExpr => EBin(Plus, EStr("", `Bytes), jsExpr);
 };
 
@@ -23,7 +23,7 @@ and from_variable_declaration =
       ident,
       Some((from_expression(init_expr), init_loc)),
     )
-and from_arguments = args => List.map(~f=from_expression, args)
+and from_arguments = args => List.map(~f=x => (from_expression(x), `Not_spread), args)
 /* Should create a separate form for operators that only make sense when coming
    from parsed JS. Most of the unary operators for example. */
 and from_unop = (unop, jsExpr) =>
@@ -39,7 +39,7 @@ and from_unop = (unop, jsExpr) =>
   | Typeof => EUn(Javascript.Typeof, jsExpr)
   | Void => EUn(Javascript.Void, jsExpr)
   | Delete => EUn(Javascript.Delete, jsExpr)
-  | Bnot => EBin(Minus, ENum(1.0), jsExpr)
+  | Bnot => EBin(Minus, ENum(Javascript.Num.of_float(1.0)), jsExpr)
   | IncrA => EUn(Javascript.IncrA, jsExpr)
   | DecrA => EUn(Javascript.DecrA, jsExpr)
   | IncrB => EUn(Javascript.IncrB, jsExpr)
@@ -107,7 +107,7 @@ and from_expression = e =>
     Javascript.ESeq(from_expression(e1), from_expression(e2))
   | ETag(index, itms) =>
     Javascript.EArr([
-      Some(Javascript.ENum(float_of_int(index))),
+      Some(Javascript.ENum(Javascript.Num.of_float(float_of_int(index)))),
       ...List.map(~f=itm => Some(from_expression(itm)), itms),
     ])
   | EStruct(itms) =>
@@ -117,12 +117,12 @@ and from_expression = e =>
   | EStructAccess(e, i) =>
     Javascript.EAccess(
       from_expression(e),
-      Javascript.ENum(float_of_int(i)),
+      Javascript.ENum(Javascript.Num.of_float(float_of_int(i))),
     )
   | EArrAccess(e1, e2) =>
     Javascript.EAccess(from_expression(e1), from_expression(e2))
   | EVectlength(e) =>
-    EBin(Minus, EDot(from_expression(e), "length"), ENum(1.0))
+    EBin(Minus, EDot(from_expression(e), "length"), ENum(Javascript.Num.of_float(1.0)))
   | EArrLen(e) => EDot(from_expression(e), "length")
   | EArityTest(e) => EDot(from_expression(e), "length")
   | ECond(e1, e2, e3) =>
@@ -145,8 +145,8 @@ and from_expression = e =>
   | EObj(lst) =>
     EObj(List.map(~f=((nm, e)) => (nm, from_expression(e)), lst))
   | EBool(b) => EBool(b)
-  | EFloat(flt) => ENum(flt)
-  | EInt(i) => ENum(float_of_int(i))
+  | EFloat(flt) => ENum(Javascript.Num.of_float(flt))
+  | EInt(i) => ENum(Javascript.Num.of_float(float_of_int(i)))
   | EQuote(s) => EQuote(s)
   | ERegexp(s, sopt) => ERegexp(s, sopt)
   | ECustomRequire(_) => failwith("ECustonRequire not supported for JS")

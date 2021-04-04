@@ -22,8 +22,8 @@
     @see <http://code.google.com/p/deriving/> the documentation of the original {i deriving} library by Jeremy Yallop.
 *)
 
-(** The type of JSON parser/printer for value of type ['a]. *)
 type 'a t
+(** The type of JSON parser/printer for value of type ['a]. *)
 
 val make : (Buffer.t -> 'a -> unit) -> (Deriving_Json_lexer.lexbuf -> 'a) -> 'a t
 
@@ -55,9 +55,9 @@ module type Json = sig
 
   (**/**)
 
-  val match_variant : [`Cst of int | `NCst of int] -> bool
+  val match_variant : [ `Cst of int | `NCst of int ] -> bool
 
-  val read_variant : Deriving_Json_lexer.lexbuf -> [`Cst of int | `NCst of int] -> a
+  val read_variant : Deriving_Json_lexer.lexbuf -> [ `Cst of int | `NCst of int ] -> a
 end
 
 (**/**)
@@ -137,9 +137,9 @@ module type Json_min' = sig
 
   val read : Deriving_Json_lexer.lexbuf -> a
 
-  val match_variant : [`Cst of int | `NCst of int] -> bool
+  val match_variant : [ `Cst of int | `NCst of int ] -> bool
 
-  val read_variant : Deriving_Json_lexer.lexbuf -> [`Cst of int | `NCst of int] -> a
+  val read_variant : Deriving_Json_lexer.lexbuf -> [ `Cst of int | `NCst of int ] -> a
 end
 
 module type Json_min'' = sig

@@ -16,6 +16,7 @@
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
+open! Import
 
 external create_file : name:string -> content:string -> unit = "caml_create_file"
 
@@ -23,14 +24,14 @@ external read_file : name:string -> string = "caml_read_file_content"
 
 let update_file ~name ~content =
   let oc = open_out name in
-  output_string oc content; close_out oc
+  output_string oc content;
+  close_out oc
 
 external set_channel_output' :
   out_channel -> (Js.js_string Js.t -> unit) Js.callback -> unit
   = "caml_ml_set_channel_output"
 
-external set_channel_input' :
-  in_channel -> (unit -> string) Js.callback -> unit
+external set_channel_input' : in_channel -> (unit -> string) Js.callback -> unit
   = "caml_ml_set_channel_refill"
 
 let set_channel_flusher (out_channel : out_channel) (f : string -> unit) =
@@ -57,6 +58,6 @@ let mount ~path f =
 let unmount ~path = unmount path
 
 let js_of_ocaml_version =
-  if Lib_version.git_version = ""
+  if String.equal Lib_version.git_version ""
   then Lib_version.s
   else Lib_version.s ^ "+" ^ Lib_version.git_version

@@ -333,7 +333,8 @@ let eval_instr info i =
                 ( prim
                 , List.map2 prim_args prim_args' ~f:(fun arg c ->
                       match c with
-                      | Some ((Int _ | Float _) as c) -> Pc c
+                      | Some ((Int _ | Float _ | IString _) as c) -> Pc c
+                      | Some (String _ as c) when Config.Flag.use_js_string () -> Pc c
                       | Some _
                       (* do not be duplicated other constant as
                           they're not represented with constant in javascript. *)
@@ -514,7 +515,9 @@ let drop_exception_handler blocks =
 let eval info blocks =
   Addr.Map.map
     (fun block ->
-      let body = List.concat (List.map block.body ~f:(eval_instr_expand info)) in
+      (* FIXME: REHP code commented here take a look at this *)
+      (* let body = List.concat (List.map block.body ~f:(eval_instr_expand info)) in *)
+      let body = List.map block.body ~f:(eval_instr info) in
       let branch = eval_branch info block.branch in
       { block with Code.body; Code.branch })
     blocks

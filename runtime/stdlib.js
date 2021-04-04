@@ -17,58 +17,31 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-///////////// Core
-
-//Provides: raw_array_sub
-function raw_array_sub (a,i,l) {
-  var b = new Array(l);
-  for(var j = 0; j < l; j++) b[j] = a[i+j];
-  return b
-}
-
-//Provides: raw_array_copy
-function raw_array_copy (a) {
-  var l = a.length;
-  var b = new Array(l);
-  for(var i = 0; i < l; i++ ) b[i] = a[i];
-  return b
-}
-
-//Provides: raw_array_cons
-function raw_array_cons (a,x) {
-  var l = a.length;
-  var b = new Array(l+1);
-  b[0]=x;
-  for(var i = 1; i <= l; i++ ) b[i] = a[i-1];
-  return b
-}
-
-//Provides: raw_array_append_one
-function raw_array_append_one(a,x) {
-  var l = a.length;
-  var b = new Array(l+1);
-  var i = 0;
-  for(; i < l; i++ ) b[i] = a[i];
-  b[i]=x;
-  return b
-}
-
 //Provides: caml_call_gen (const, shallow)
-//Requires: raw_array_sub
-//Requires: raw_array_append_one
+//Weakdef
 function caml_call_gen(f, args) {
   if(f.fun)
     return caml_call_gen(f.fun, args);
-  var n = f.length;
-  var argsLen = args.length;
-  var d = n - argsLen;
+  //FIXME, can happen with too many arguments
+  if(typeof f !== "function") return f;
+  var n = f.length | 0;
+  if(n === 0) return f.apply(null,args);
+  var argsLen = args.length | 0;
+  var d = n - argsLen | 0;
   if (d == 0)
     return f.apply(null, args);
-  else if (d < 0)
-    return caml_call_gen(f.apply(null, raw_array_sub(args,0,n)),
-                         raw_array_sub(args,n,argsLen - n));
-  else
-    return function (x){ return caml_call_gen(f, raw_array_append_one(args,x)); };
+  else if (d < 0) {
+    return caml_call_gen(f.apply(null,args.slice(0,n)),args.slice(n));
+  }
+  else {
+    return function (){
+      var extra_args = (arguments.length == 0)?1:arguments.length;
+      var nargs = new Array(args.length+extra_args);
+      for(var i = 0; i < args.length; i++ ) nargs[i] = args[i];
+      for(var i = 0; i < arguments.length; i++ ) nargs[args.length+i] = arguments[i];
+      return caml_call_gen(f, nargs)
+    }
+  }
 }
 
 //Provides: caml_named_values

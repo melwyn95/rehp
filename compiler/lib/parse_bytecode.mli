@@ -21,17 +21,17 @@
 open Stdlib
 
 module Debug : sig
-  type data
+  type t
 
-  val create : unit -> data
+  val create : toplevel:bool -> bool -> t
 
-  val find_loc : data -> ?after:bool -> int -> Parse_info.t option
+  val find_loc : t -> ?after:bool -> int -> Parse_info.t option
 
-  val is_empty : data -> bool
+  val is_empty : t -> bool
 
-  val paths : data -> units:StringSet.t -> StringSet.t
+  val paths : t -> units:StringSet.t -> StringSet.t
 
-  val hash_data_for_change_detection : data -> int
+  val hash_data_for_change_detection : t -> int
   (** Computes a hash of debug data for the sake of detecting changes
      to inputs that may affect compilation outputs. *)
 end
@@ -39,7 +39,7 @@ end
 type one =
   { code : Code.program
   ; cmis : StringSet.t
-  ; debug : Debug.data
+  ; debug : Debug.t
   }
 
 val from_exe :
@@ -47,14 +47,14 @@ val from_exe :
   -> ?toplevel:bool
   -> ?exported_unit:string list
   -> ?dynlink:bool
-  -> ?debug:[ `Full | `Names | `No ]
+  -> ?debug:bool
   -> in_channel
   -> one
 
 val from_cmo :
      ?includes:string list
   -> ?toplevel:bool
-  -> ?debug:[ `Full | `Names | `No ]
+  -> ?debug:bool
   -> Cmo_format.compilation_unit
   -> in_channel
   -> one
@@ -62,7 +62,7 @@ val from_cmo :
 val from_cma :
      ?includes:string list
   -> ?toplevel:bool
-  -> ?debug:[ `Full | `Names | `No ]
+  -> ?debug:bool
   -> Cmo_format.library
   -> in_channel
   -> one
@@ -71,7 +71,7 @@ val from_channel :
      in_channel
   -> [ `Cmo of Cmo_format.compilation_unit | `Cma of Cmo_format.library | `Exe ]
 
-val from_string : string array -> string -> Code.program * Debug.data
+val from_string : string array -> string -> Code.program * Debug.t
 
 val predefined_exceptions : unit -> Code.program
 

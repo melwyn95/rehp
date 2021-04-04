@@ -1,12 +1,13 @@
 (executables
   (names hypertree)
   (libraries js_of_ocaml-lwt)
+  (modes byte)
   (preprocess (pps js_of_ocaml-ppx)))
 
 (rule
   (targets hypertree.js)
   (action
-    (run %{bin:js_of_ocaml} --noruntime %{lib:js_of_ocaml-compiler:runtime.js}
+    (run %{bin:js_of_ocaml}
          --source-map %{dep:hypertree.bc} -o %{targets} --pretty
          -I ./ --file %{dep:image_info.json} --file %{dep:messages.json} --file %{dep:tree.json})))
 

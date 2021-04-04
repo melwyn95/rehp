@@ -18,6 +18,7 @@
  *)
 
 open Js_of_ocaml
+open! Import
 
 let js_string_of_float f = (Js.number_of_float f)##toString
 
@@ -25,11 +26,11 @@ let js_string_of_int i = (Js.number_of_float (float_of_int i))##toString
 
 module type XML =
   Xml_sigs.T
-  with type uri = string
-   and type event_handler = Dom_html.event Js.t -> bool
-   and type mouse_event_handler = Dom_html.mouseEvent Js.t -> bool
-   and type keyboard_event_handler = Dom_html.keyboardEvent Js.t -> bool
-   and type elt = Dom.node Js.t
+    with type uri = string
+     and type event_handler = Dom_html.event Js.t -> bool
+     and type mouse_event_handler = Dom_html.mouseEvent Js.t -> bool
+     and type keyboard_event_handler = Dom_html.keyboardEvent Js.t -> bool
+     and type elt = Dom.node Js.t
 
 module Xml = struct
   module W = Xml_wrap.NoWrap
@@ -104,9 +105,61 @@ module Xml = struct
 
   let encodedpcdata s = (Dom_html.document##createTextNode (Js.string s) :> Dom.node Js.t)
 
-  let entity e =
-    let entity = Dom_html.decode_html_entities (Js.string ("&" ^ e ^ ";")) in
-    (Dom_html.document##createTextNode entity :> Dom.node Js.t)
+  let entity =
+    let string_fold s ~pos ~init ~f =
+      let r = ref init in
+      for i = pos to String.length s - 1 do
+        let c = s.[i] in
+        r := f !r c
+      done;
+      !r
+    in
+    let invalid_entity e = failwith (Printf.sprintf "Invalid entity %S" e) in
+    let int_of_char = function
+      | '0' .. '9' as x -> Some (Char.code x - Char.code '0')
+      | 'a' .. 'f' as x -> Some (Char.code x - Char.code 'a' + 10)
+      | 'A' .. 'F' as x -> Some (Char.code x - Char.code 'A' + 10)
+      | _ -> None
+    in
+    let parse_int ~pos ~base e =
+      string_fold e ~pos ~init:0 ~f:(fun acc x ->
+          match int_of_char x with
+          | Some d when d < base -> (acc * base) + d
+          | Some _ | None -> invalid_entity e)
+    in
+    let is_alpha_num = function
+      | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' -> true
+      | _ -> false
+    in
+    fun e ->
+      let len = String.length e in
+      let str =
+        if len >= 1 && Char.equal e.[0] '#'
+        then
+          let i =
+            if len >= 2 && (Char.equal e.[1] 'x' || Char.equal e.[1] 'X')
+            then parse_int ~pos:2 ~base:16 e
+            else parse_int ~pos:1 ~base:10 e
+          in
+          Js.string_constr##fromCharCode i
+        else if string_fold e ~pos:0 ~init:true ~f:(fun acc x ->
+                    (* This is not quite right according to
+                       https://www.xml.com/axml/target.html#NT-Name.
+                       but it seems to cover all html5 entities
+                       https://dev.w3.org/html5/html-author/charref *)
+                    acc && is_alpha_num x)
+        then
+          match e with
+          | "quot" -> Js.string "\""
+          | "amp" -> Js.string "&"
+          | "apos" -> Js.string "'"
+          | "lt" -> Js.string "<"
+          | "gt" -> Js.string ">"
+          | "" -> invalid_entity e
+          | _ -> Dom_html.decode_html_entities (Js.string ("&" ^ e ^ ";"))
+        else invalid_entity e
+      in
+      (Dom_html.document##createTextNode str :> Dom.node Js.t)
 
   (* TODO: fix get_prop
      it only work when html attribute and dom property names correspond.
@@ -117,7 +170,9 @@ module Xml = struct
     if Js.Optdef.test (Js.Unsafe.get node name) then Some name else None
 
   let iter_prop_protected node name f =
-    match get_prop node name with Some n -> ( try f n with _ -> () ) | None -> ()
+    match get_prop node name with
+    | Some n -> ( try f n with _ -> ())
+    | None -> ()
 
   let attach_attribs node l =
     List.iter
@@ -126,7 +181,7 @@ module Xml = struct
         match att with
         | Attr a ->
             (* Note that once we have weak pointers working, we'll need to React.S.retain *)
-            let _ : unit React.S.t =
+            let (_ : unit React.S.t) =
               React.S.map
                 (function
                   | Some v -> (
@@ -135,21 +190,21 @@ module Xml = struct
                       | "style" -> node##.style##.cssText := v
                       | _ ->
                           iter_prop_protected node n (fun name ->
-                              Js.Unsafe.set node name v ) )
+                              Js.Unsafe.set node name v))
                   | None -> (
                       ignore (node##removeAttribute n);
                       match n' with
                       | "style" -> node##.style##.cssText := Js.string ""
                       | _ ->
                           iter_prop_protected node n (fun name ->
-                              Js.Unsafe.set node name Js.null ) ))
+                              Js.Unsafe.set node name Js.null)))
                 a
             in
             ()
         | Event h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev))
         | MouseEvent h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev))
         | KeyboardEvent h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev))
-        | TouchEvent h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev)) )
+        | TouchEvent h -> Js.Unsafe.set node n (fun ev -> Js.bool (h ev)))
       l
 
   let leaf ?(a = []) name =
@@ -221,9 +276,9 @@ module Register = struct
   let head ?keep content = add_to ?keep Dom_html.document##.head content
 
   let html ?head body =
-    ( match head with
+    (match head with
     | Some h -> Dom_html.document##.head := To_dom.of_head h
-    | None -> () );
+    | None -> ());
     Dom_html.document##.body := To_dom.of_body body;
     ()
 end
@@ -275,7 +330,7 @@ module Util = struct
         let i = if i < 0 then dom##.childNodes##.length + i else i in
         match Js.Opt.to_option (dom##.childNodes##item i) with
         | Some old -> ignore (dom##replaceChild x old)
-        | _ -> assert false )
+        | _ -> assert false)
     | X (i, move) -> (
         let i = if i < 0 then dom##.childNodes##.length + i else i in
         if move = 0
@@ -283,7 +338,7 @@ module Util = struct
         else
           match Js.Opt.to_option (dom##.childNodes##item i) with
           | Some i' -> insertAt dom (i + if move > 0 then move + 1 else move) i'
-          | _ -> assert false )
+          | _ -> assert false)
 
   let rec removeChildren dom =
     match Js.Opt.to_option dom##.lastChild with
@@ -298,8 +353,9 @@ module Util = struct
         (* Format.eprintf "replace all@."; *)
         removeChildren dom;
         List.iter (fun l -> ignore (dom##appendChild l)) l
-    | Patch p -> (* Format.eprintf "patch@."; *)
-                 List.iter (merge_one_patch dom) p
+    | Patch p ->
+        (* Format.eprintf "patch@."; *)
+        List.iter (merge_one_patch dom) p
 
   let update_children (dom : Dom.node Js.t) (nodes : Dom.node Js.t t) =
     removeChildren dom;
@@ -368,8 +424,7 @@ module R = struct
 
     let uri_attrib name s = attr name (fun f -> Some (Js.string f)) s
 
-    let uris_attrib name s =
-      attr name (fun f -> Some (Js.string (String.concat " " f))) s
+    let uris_attrib name s = attr name (fun f -> Some (Js.string (String.concat " " f))) s
 
     type elt = Xml.elt
 

@@ -152,6 +152,8 @@ type constant =
   | Int of int32
   | Null
 
+val constant_equal : constant -> constant -> bool option
+
 type prim_arg =
   | Pv of Var.t
   | Pc of constant
@@ -164,9 +166,8 @@ type expr =
   | Closure of Var.t list * cont
   | Constant of constant
   (*XXX REMOVE *)
-  | Prim of prim * prim_arg list
-
 (*XXX prim * Var.t list * constant list *)
+  | Prim of prim * prim_arg list
 
 type instr =
   | Let of Var.t * expr

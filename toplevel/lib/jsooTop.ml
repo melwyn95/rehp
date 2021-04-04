@@ -26,7 +26,7 @@ let split_primitives p =
   let rec split beg cur =
     if cur >= len
     then []
-    else if p.[cur] = '\000'
+    else if Char.equal p.[cur] '\000'
     then String.sub p ~pos:beg ~len:(cur - beg) :: split (cur + 1) (cur + 1)
     else split beg (cur + 1)
   in
@@ -34,94 +34,92 @@ let split_primitives p =
 
 let setup =
   lazy
-    ( Hashtbl.add
-        Toploop.directive_table
-        "enable"
-        (Toploop.Directive_string Config.Flag.enable);
-      Hashtbl.add
-        Toploop.directive_table
-        "disable"
-        (Toploop.Directive_string Config.Flag.disable);
-      Hashtbl.add
-        Toploop.directive_table
-        "debug_on"
-        (Toploop.Directive_string Debug.enable);
-      Hashtbl.add
-        Toploop.directive_table
-        "debug_off"
-        (Toploop.Directive_string Debug.disable);
-      Hashtbl.add
-        Toploop.directive_table
-        "tailcall"
-        (Toploop.Directive_string (Config.Param.set "tc"));
-      Topdirs.dir_directory "/static/cmis";
-      let initial_primitive_count =
-        Array.length (split_primitives (Symtable.data_primitive_names ()))
-      in
-      let compile s =
-        let prims = split_primitives (Symtable.data_primitive_names ()) in
-        let unbound_primitive p =
-          try
-            ignore (Js.Unsafe.eval_string p);
-            false
-          with _ -> true
-        in
-        let stubs = ref [] in
-        Array.iteri prims ~f:(fun i p ->
-            if i >= initial_primitive_count && unbound_primitive p
-            then
-              stubs :=
-                Format.sprintf "function %s(){caml_failwith(\"%s not implemented\")}" p p
-                :: !stubs );
-        let output_program = Driver.from_string prims s in
-        let b = Buffer.create 100 in
-        output_program (Pretty_print.to_buffer b);
-        Format.(pp_print_flush std_formatter ());
-        Format.(pp_print_flush err_formatter ());
-        flush stdout;
-        flush stderr;
-        let res = Buffer.contents b in
-        let res = String.concat ~sep:"" !stubs ^ res in
-        let res : unit -> _ = Js.Unsafe.global##toplevelEval res in
-        res
-      in
-      Js.Unsafe.global##.toplevelCompile := compile (*XXX HACK!*);
-      ( Js.Unsafe.global##.toplevelEval
-      := fun x ->
-      let f : < .. > Js.t -> < .. > Js.t = Js.Unsafe.eval_string x in
-      fun () ->
-        let res = f Js.Unsafe.global in
-        Format.(pp_print_flush std_formatter ());
-        Format.(pp_print_flush err_formatter ());
-        flush stdout; flush stderr; res );
-      Js.Unsafe.global##.toplevelReloc
-      := Js.Unsafe.callback (fun name ->
-             let name = Js.to_string name in
-             let buf = Bytes.create 4 in
-             Symtable.patch_object buf [Reloc_setglobal (Ident.create_persistent name), 0];
-             let i =
-               let get i = Char.code (Bytes.get buf i) in
-               get 0 + (get 1 lsl 8) + (get 2 lsl 16) + (get 3 lsl 24)
-             in
-             i );
-      () )
+    (Topdirs.dir_directory "/static/cmis";
+     Hashtbl.add
+       Toploop.directive_table
+       "enable"
+       (Toploop.Directive_string Config.Flag.enable);
+     Hashtbl.add
+       Toploop.directive_table
+       "disable"
+       (Toploop.Directive_string Config.Flag.disable);
+     Hashtbl.add
+       Toploop.directive_table
+       "debug_on"
+       (Toploop.Directive_string Debug.enable);
+     Hashtbl.add
+       Toploop.directive_table
+       "debug_off"
+       (Toploop.Directive_string Debug.disable);
+     Hashtbl.add
+       Toploop.directive_table
+       "tailcall"
+       (Toploop.Directive_string (Config.Param.set "tc"));
+     let initial_primitive_count =
+       Array.length (split_primitives (Symtable.data_primitive_names ()))
+     in
+     (* this needs to stay synchronized with toplevel.js *)
+     let compile (s : bytes array) =
+       let s = String.concat ~sep:"" (List.map ~f:Bytes.to_string (Array.to_list s)) in
+       let prims = split_primitives (Symtable.data_primitive_names ()) in
+       let unbound_primitive p =
+         try
+           ignore (Js.Unsafe.eval_string p);
+           false
+         with _ -> true
+       in
+       let stubs = ref [] in
+       Array.iteri prims ~f:(fun i p ->
+           if i >= initial_primitive_count && unbound_primitive p
+           then
+             stubs :=
+               Format.sprintf "function %s(){caml_failwith(\"%s not implemented\")}" p p
+               :: !stubs);
+       let output_program = Driver.from_string prims s in
+       let b = Buffer.create 100 in
+       output_program (Pretty_print.to_buffer b);
+       Format.(pp_print_flush std_formatter ());
+       Format.(pp_print_flush err_formatter ());
+       flush stdout;
+       flush stderr;
+       let res = Buffer.contents b in
+       let res = String.concat ~sep:"" !stubs ^ res in
+       let res : unit -> _ = Js.Unsafe.global##toplevelEval (res : string) in
+       res
+     in
+     Js.Unsafe.global##.toplevelCompile := compile (*XXX HACK!*);
+     (Js.Unsafe.global##.toplevelEval
+     := fun (x : string) ->
+     let f : < .. > Js.t -> < .. > Js.t = Js.Unsafe.eval_string x in
+     fun () ->
+       let res = f Js.Unsafe.global in
+       Format.(pp_print_flush std_formatter ());
+       Format.(pp_print_flush err_formatter ());
+       flush stdout;
+       flush stderr;
+       res);
+     Js.Unsafe.global##.toplevelReloc
+     := Js.Unsafe.callback (fun name ->
+            let name = Js.to_string name in
+            Js_of_ocaml_compiler.Ocaml_compiler.Symtable.reloc_ident name);
+     ())
 
 let refill_lexbuf s p ppf buffer len =
   if !p = String.length s
   then 0
   else
     let len', nl =
-      try String.index_from s !p '\n' - !p + 1, false with _ ->
-        String.length s - !p, true
+      try String.index_from s !p '\n' - !p + 1, false
+      with _ -> String.length s - !p, true
     in
     let len'' = min len len' in
     String.blit ~src:s ~src_pos:!p ~dst:buffer ~dst_pos:0 ~len:len'';
-    ( match ppf with
+    (match ppf with
     | Some ppf ->
         Format.fprintf ppf "%s" (Bytes.sub_string buffer ~pos:0 ~len:len'');
         if nl then Format.pp_print_newline ppf ();
         Format.pp_print_flush ppf ()
-    | None -> () );
+    | None -> ());
     p := !p + len'';
     len''
 
@@ -133,22 +131,24 @@ let use ffp content =
 
 let execute printval ?pp_code ?highlight_location pp_answer s =
   let lb = Lexing.from_function (refill_lexbuf s (ref 0) pp_code) in
-  ( try
-      while true do
-        try
-          let phr = !Toploop.parse_toplevel_phrase lb in
-          let phr = JsooTopPpx.preprocess_phrase phr in
-          ignore (Toploop.execute_phrase printval pp_answer phr : bool)
-        with
-        | End_of_file -> raise End_of_file
-        | x ->
-            ( match highlight_location with
-            | None -> ()
-            | Some f -> (
-              match JsooTopError.loc x with None -> () | Some loc -> f loc ) );
-            Errors.report_error Format.err_formatter x
-      done
-    with End_of_file -> () );
+  (try
+     while true do
+       try
+         let phr = !Toploop.parse_toplevel_phrase lb in
+         let phr = JsooTopPpx.preprocess_phrase phr in
+         ignore (Toploop.execute_phrase printval pp_answer phr : bool)
+       with
+       | End_of_file -> raise End_of_file
+       | x ->
+           (match highlight_location with
+           | None -> ()
+           | Some f -> (
+               match JsooTopError.loc x with
+               | None -> ()
+               | Some loc -> f loc));
+           Errors.report_error Format.err_formatter x
+     done
+   with End_of_file -> ());
   flush_all ()
 
 let initialize () =

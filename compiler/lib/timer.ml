@@ -16,9 +16,16 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
  *)
 
+open! Stdlib
+
 type t = float
+
 let timer = ref (fun _ -> 0.)
+
 let init f = timer := f
+
 let make () = !timer ()
+
 let get t = !timer () -. t
+
 let print f t = Format.fprintf f "%.2f" (get t)

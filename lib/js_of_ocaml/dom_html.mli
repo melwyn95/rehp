@@ -423,11 +423,25 @@ and touch =
     method pageY : int readonly_prop
   end
 
+and submitEvent =
+  object
+    inherit event
+
+    method submitter : element t optdef readonly_prop
+  end
+
 and dragEvent =
   object
     inherit mouseEvent
 
     method dataTransfer : dataTransfer t readonly_prop
+  end
+
+and clipboardEvent =
+  object
+    inherit event
+
+    method clipboardData : dataTransfer t readonly_prop
   end
 
 and dataTransfer =
@@ -841,7 +855,7 @@ class type formElement =
 
     method reset : unit meth
 
-    method onsubmit : ('self t, event t) event_listener writeonly_prop
+    method onsubmit : ('self t, submitEvent t) event_listener writeonly_prop
   end
 
 class type optGroupElement =
@@ -2011,11 +2025,15 @@ class type navigator =
 
     method platform : js_string t readonly_prop
 
+    method vendor : js_string t readonly_prop
+
     method userAgent : js_string t readonly_prop
 
     method language : js_string t optdef readonly_prop
 
     method userLanguage : js_string t optdef readonly_prop
+
+    method maxTouchPoints : int t readonly_prop
   end
 
 class type screen =
@@ -2277,6 +2295,12 @@ module Event : sig
 
   val click : mouseEvent t typ
 
+  val copy : clipboardEvent t typ
+
+  val cut : clipboardEvent t typ
+
+  val paste : clipboardEvent t typ
+
   val dblclick : mouseEvent t typ
 
   val mousedown : mouseEvent t typ
@@ -2329,7 +2353,7 @@ module Event : sig
 
   val timeupdate : event t typ
 
-  val submit : event t typ
+  val submit : submitEvent t typ
 
   val scroll : event t typ
 

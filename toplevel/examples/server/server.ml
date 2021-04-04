@@ -9,7 +9,7 @@ let filesys = ref (Findlib.default_location ())
 
 let server () =
   let re_filesys =
-    compile (seq [str "/filesys/"; group (seq [str !filesys; rep any]); eos])
+    compile (seq [ str "/filesys/"; group (seq [ str !filesys; rep any ]); eos ])
   in
   let header typ =
     let h = Header.init () in
@@ -26,7 +26,7 @@ let server () =
     let path = Uri.path uri in
     try
       (* send binary file *)
-      let fname = get (exec re_filesys path) 1 in
+      let fname = Group.get (exec re_filesys path) 1 in
       Lwt_io.eprintf "filesys: %s\n" fname
       >>= fun () -> Server.respond_file ~headers:header_plain_user_charset ~fname ()
     with _ ->

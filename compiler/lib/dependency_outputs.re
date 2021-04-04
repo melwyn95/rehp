@@ -1,4 +1,5 @@
 open Stdlib;
+open Poly;
 module Fp = RehpFp;
 type output = {
   dirRelativeToOutput: Fp.t(Fp.relative),

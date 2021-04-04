@@ -19,6 +19,7 @@
 
 open Js
 open Dom_html
+open! Import
 
 class type ['a, 'b] worker =
   object ('self)
@@ -37,7 +38,7 @@ and errorEvent =
   object
     inherit event
 
-    method msg : js_string t readonly_prop
+    method message : js_string t readonly_prop
 
     method filename : js_string t readonly_prop
 

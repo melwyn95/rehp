@@ -29,7 +29,8 @@ class type mapper =
 
     method initialiser : expression * Loc.t -> expression * Loc.t
 
-    method initialiser_o : (expression * Loc.t) option -> (expression * Loc.t) option
+    method initialiser_o : 
+      (expression * Loc.t) option -> (expression * Loc.t) option
 
     method variable_declaration :
       Javascript.variable_declaration -> Javascript.variable_declaration
@@ -62,7 +63,8 @@ type t =
   ; def_name : StringSet.t
   ; def : Code.Var.Set.t
   ; use : Code.Var.Set.t
-  ; count : int Id.IdentMap.t }
+  ; count : int Id.IdentMap.t 
+  }
 
 class type freevar =
   object ('a)

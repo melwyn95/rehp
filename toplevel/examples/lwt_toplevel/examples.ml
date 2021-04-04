@@ -1,4 +1,5 @@
 (** Overview *)
+
 let x = 10 + 10
 
 let y = x * 3
@@ -14,11 +15,19 @@ let _ = Printf.printf "fact 20 = %f\n" (fact 20)
 let _ = "abc" < "def"
 
 (** Mutually recursive function *)
-let rec even n = match n with 0 -> true | x -> odd (x - 1)
 
-and odd n = match n with 0 -> false | x -> even (x - 1)
+let rec even n =
+  match n with
+  | 0 -> true
+  | x -> odd (x - 1)
+
+and odd n =
+  match n with
+  | 0 -> false
+  | x -> even (x - 1)
 
 (** Mutually recursive module *)
+
 module rec Odd : sig
   val odd : int -> bool
 end = struct
@@ -32,9 +41,10 @@ end = struct
 end
 
 (** Reactive dom *)
-open Js_of_ocaml
 
+open Js_of_ocaml
 open Js_of_ocaml_lwt
+open Js_of_ocaml_tyxml
 
 let display x =
   Dom.appendChild (Dom_html.getElementById "output") (Tyxml_js.To_dom.of_element x)
@@ -43,7 +53,7 @@ module RList = ReactiveData.RList
 
 let rl, rhandle = RList.create []
 
-let li_rl = RList.map (fun x -> Tyxml_js.Html.(li [pcdata x])) rl
+let li_rl = RList.map (fun x -> Tyxml_js.Html.(li [ txt x ])) rl
 
 let ul_elt = Tyxml_js.R.Html.ul li_rl
 
@@ -64,40 +74,49 @@ let remove pos = RList.remove pos rhandle
 
 let time_signal =
   let s, set = React.S.create (Sys.time ()) in
-  let rec loop () =
+  let rec loop () : unit Lwt.t =
     set (Sys.time ());
     Lwt.bind (Lwt_js.sleep 1.) loop
   in
-  Lwt.async loop; s
+  Lwt.async loop;
+  s
 
 let div_elt =
   Tyxml_js.(
     Html.(
       div
         [ h4
-            [ pcdata "Uptime is "
-            ; R.Html.pcdata
+            [ txt "Uptime is "
+            ; R.Html.txt
                 (React.S.map (fun s -> string_of_int (int_of_float s)) time_signal)
-            ; pcdata " s" ]
-        ; ul_elt ]))
+            ; txt " s"
+            ]
+        ; ul_elt
+        ]))
 
 let _ = display div_elt
 
 (** Graphics: Draw *)
-open Graphics_js
 
-let () = loop [Mouse_motion] (function {mouse_x = x; mouse_y = y} -> fill_circle x y 5)
-
-(** Graphics: Draw chars*)
 open Graphics_js
 
 let () =
-  loop [Mouse_motion; Key_pressed] (function {mouse_x = x; mouse_y = y; key} ->
-      moveto x y; draw_char key )
+  loop [ Mouse_motion ] (function { mouse_x = x; mouse_y = y } -> fill_circle x y 5)
+
+(** Graphics: Draw chars*)
+
+open Graphics_js
+
+let () =
+  loop [ Mouse_motion; Key_pressed ] (function
+      | { key = '\000'; _ } -> ()
+      | { mouse_x = x; mouse_y = y; key } ->
+          moveto x y;
+          draw_char key)
 
 (** Graphics: PingPong *)
-open Js_of_ocaml_lwt
 
+open Js_of_ocaml_lwt
 open Graphics_js
 
 let c = 3
@@ -110,7 +129,9 @@ and y0 = 0
 
 and y1 = size_y ()
 
-let draw_ball x y = set_color foreground; fill_circle x y c
+let draw_ball x y =
+  set_color foreground;
+  fill_circle x y c
 
 let state = ref (Lwt.task ())
 
