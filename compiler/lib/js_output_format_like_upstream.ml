@@ -341,10 +341,10 @@ struct
         then (
           PP.start_group f 1;
           PP.string f "(");
-        expression 0 f e1;
+        expression 0 f (e1, `Not_spread);
         PP.string f ",";
         PP.break f;
-        expression 0 f e2;
+        expression 0 f (e2, `Not_spread);
         if l > 0
         then (
           PP.string f ")";
@@ -378,7 +378,7 @@ struct
           PP.string f "(");
         output_debug_info f loc;
         PP.start_group f 1;
-        expression 15 f e;
+        expression 15 f (e, `Not_spread);
         PP.break f;
         PP.start_group f 1;
         PP.string f "(";
@@ -414,7 +414,7 @@ struct
         PP.start_group f 0;
         PP.string f "typeof";
         PP.space f;
-        expression 13 f e;
+        expression 13 f (e, `Not_spread);
         PP.end_group f;
         if l > 13
         then (

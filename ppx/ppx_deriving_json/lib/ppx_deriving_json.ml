@@ -146,7 +146,11 @@ let fold_right_type_params fn params accum =
 
 let fold_right_type_decl fn { ptype_params; _ } accum =
   fold_right_type_params fn ptype_params accum
+
+let fold_left_type_params fn accum params =
+  List.fold_left
     ~f:(fun accum (param, _) ->
+      match param with
       | { ptyp_desc = Ptyp_any; _ } -> accum
       | { ptyp_desc = Ptyp_var name; _ } ->
           let name = mkloc name param.ptyp_loc in
@@ -456,7 +460,10 @@ and read_of_record_raw ?decl ?(return = fun x -> x) l =
   let f =
     let f { Parsetree.pld_name; _ } e = label_of_constructor pld_name, e in
     fun l' -> return (Exp.record (List.map2 ~f l l') None)
+  and l =
+    let f { Parsetree.pld_type; _ } = pld_type in
     List.map ~f l
+  in
   read_tuple_contents l ?decl ~f
 
 and read_of_record decl l =

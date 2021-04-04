@@ -251,7 +251,7 @@ module IdentUtilities = struct
 
   let table_contents_names_for_hashing sz (t : 'a Ident_.tbl) =
     List.sort
-      ~cmp:(fun (i) (j) -> compare i j)
+      ~cmp:(fun (i) (j) -> Poly.compare i j)
       (table_contents_rec sz (Obj.magic (t : 'a Ident_.tbl) : 'a Ident_.tbl') [])
 end
 

@@ -129,7 +129,7 @@ let reserved = ref StringSet.empty
 let add_reserved s =
   reserved := List.fold_left s ~init:!reserved ~f:(fun acc x -> StringSet.add x acc)
 
-let _ = reserved := StringSet.union !reserved Reserved.keyword
+let _ = reserved := StringSet.union !reserved (Backend.Current.keyword ())
 
 let get_reserved () = !reserved
 

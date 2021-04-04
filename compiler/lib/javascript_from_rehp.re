@@ -143,7 +143,7 @@ and from_expression = e =>
   | ENew(e, optargs) =>
     ENew(from_expression(e), Stdlib.Option.map(~f=from_arguments, optargs))
   | EObj(lst) =>
-    EObj(List.map(~f=((nm, e)) => (nm, from_expression(e)), lst))
+    EObj(List.map(~f=((nm, e)) => (Id.property_name_to_JS(nm), from_expression(e)), lst))
   | EBool(b) => EBool(b)
   | EFloat(flt) => ENum(Javascript.Num.of_float(flt))
   | EInt(i) => ENum(Javascript.Num.of_float(float_of_int(i)))

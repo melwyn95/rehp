@@ -41,6 +41,12 @@ type property_name =
   | PNS(string)
   | PNN(float);
 
+let property_name_to_JS = pn => switch (pn) {
+  | PNI(i) => Javascript.PNI(i)
+  | PNS(s) => Javascript.PNS(s)
+  | PNN(n) => Javascript.PNN(Javascript.Num.of_float(n))
+  }
+
 let compare_ident = (t1, t2) =>
   switch (t1, t2) {
   | (V(v1), V(v2)) => Code.Var.compare(v1, v2)
